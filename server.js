@@ -336,6 +336,19 @@ async function api(req, res, url) {
       markActive(u, body.date); save();
       return send(res, 200, { user: publicUser(u) });
     }
+    if (route === '/api/wb/medit' && method === 'POST') {
+      if (body.letter) {
+        w.letter = { to: String(body.letter.to || '').trim().slice(0, 100), done: !!body.letter.done, at: new Date().toISOString() };
+        save(); return send(res, 200, { user: publicUser(u) });
+      }
+      if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
+      w.medit = w.medit || {};
+      const min = Math.max(0, Math.min(300, Math.round(Number(body.min) || 0)));
+      const feel = String(body.feel || '').trim().slice(0, 300);
+      if (!min && !feel) delete w.medit[body.date]; else w.medit[body.date] = { min, feel, at: new Date().toISOString() };
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
     if (route === '/api/wb/kindlog' && method === 'POST') {
       if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
       w.kindlog = w.kindlog || {};

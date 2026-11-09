@@ -646,7 +646,7 @@
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.health ? ` · יומן תנועה ושינה ${Object.keys(w.health).length} ימים` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.health ? ` · יומן תנועה ושינה ${Object.keys(w.health).length} ימים` : ''}${w.medit ? ` · מדיטציה ${Object.keys(w.medit).length} ימים` : ''}${w.letter && w.letter.done ? ` · מכתב תודה נמסר${w.letter.to ? ' ל' + esc(w.letter.to) : ''} 💌` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
   }
 
   async function viewParent() {
@@ -767,6 +767,7 @@
       s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
     }
+    if (CUR === 5) s.push({ key: 'medit', href: '#/wb/5/medit', title: 'היומן שלי: מדיטציה ומכתב תודה', icon: '🧘', done: Object.keys(WB().medit || {}).length > 0 || !!(WB().letter && WB().letter.done) });
     if (CUR === 4) s.push({ key: 'health', href: '#/wb/4/health', title: 'היומן שלי: תנועה ושינה', icon: '🏃', done: Object.keys(WB().health || {}).length > 0 });
     if (CUR === 3) s.push({ key: 'kindlog', href: '#/wb/3/kindlog', title: 'היומן שלי: טוב לב וקשר חברתי', icon: '🤝', done: Object.keys(WB().kindlog || {}).length > 0 });
     if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
@@ -793,6 +794,7 @@
     if (sub === 'journal') return wbJournal();
     if (sub === 'kindlog') return wbKindlog();
     if (sub === 'health') return wbHealth();
+    if (sub === 'medit') return wbMedit();
     if (sub === 'review') return wbReview();
     if (sub === 'quiz') return wbQuiz();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
@@ -818,6 +820,7 @@
     const s = WBC.sections[i]; if (!s) return go('#/wb/' + CUR);
     let html = s.html.replace('@@FIG@@', WB_FIG);
     if (/^משימת/.test(s.title) && CUR === 1) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/1/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/1/via">💪 לבחור חוזקות</a></div>`;
+    if (/^משימת/.test(s.title) && CUR === 5) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/5/medit">🧘 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 4) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/4/health">🏃 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
@@ -948,6 +951,42 @@
     document.getElementById('hnext').onclick = () => { sessionStorage.setItem('wb_hdate', shift(date, 1)); wbHealth(); };
     document.getElementById('hsave').onclick = async () => {
       try { user = (await api('wb/health', { date, act: document.getElementById('hact').value, min: document.getElementById('hmin').value, sleep: document.getElementById('hsleep').value })).user; toast('✅ נשמר ביומן'); wbHealth(); }
+      catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
+  }
+  function wbMedit() {
+    const J = WB().medit || {}; const L = WB().letter || { to: '', done: false }; const t = today();
+    let date = sessionStorage.getItem('wb_mdate') || t; if (date > t) date = t;
+    const e = J[date] || { min: '', feel: '' };
+    const days = Object.keys(J).sort().reverse();
+    const good = days.filter((d) => J[d].min >= 10).length;
+    const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const dots = (n, of) => `<span class="big7">${Array.from({ length: of }, (_, i) => `<span class="dot ${i < n ? 'on' : ''}"></span>`).join('')}</span>`;
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+      <div class="card"><h1>🧘 היומן שלי: מדיטציה ומכתב תודה</h1>
+      <p class="muted">כל יום רושמים כמה דקות מדטתם ואיך הרגשתם אחר כך. המטרה: לפחות 10 דקות ב-7 ימים, ומכתב תודה אחד שנקרא בקול.</p>
+      <div class="row">🧘 ${dots(Math.min(good, 7), 7)}<span class="small muted">${good}/7 ימים עם 10 דקות ומעלה</span></div>
+      <div class="row" style="margin-top:6px">💌 <span class="pill ${L.done ? 'ok' : ''}">${L.done ? 'מכתב התודה נמסר 🎉' : 'מכתב התודה עוד לא נמסר'}</span></div></div>
+      <div class="card"><div class="row between"><button class="btn ghost" id="mprev">→ יום קודם</button><h2 style="margin:0">${date === t ? 'היום' : fmtDate(date)}</h2><button class="btn ghost" id="mnext" ${date >= t ? 'disabled' : ''}>יום הבא ←</button></div>
+        <div class="row" style="margin-top:16px"><label>⏱️ דקות מדיטציה: <input id="mmin" class="search" type="number" min="0" max="300" style="width:100px;margin:0" value="${esc(e.min || '')}"></label></div>
+        <h3 style="margin-top:12px">💭 איך הרגשתי אחרי?</h3>
+        <input id="mfeel" class="search" style="width:100%" placeholder="למשל: יותר רגועה, היה קשה להתרכז" value="${esc(e.feel)}">
+        <div class="row" style="margin-top:12px"><button class="btn" id="msave">💾 שמירה</button></div></div>
+      <div class="card"><h2>💌 מכתב תודה</h2>
+        <p class="muted">למי אתם כותבים? (המכתב עצמו נשאר אצלכם – כותבים אותו על דף.)</p>
+        <input id="lto" class="search" style="width:100%" placeholder="למשל: סבתא, המורה למתמטיקה" value="${esc(L.to)}">
+        <label class="row" style="margin-top:10px"><input type="checkbox" id="ldone" ${L.done ? 'checked' : ''}> קראתי את המכתב בקול למי שכתבתי לו</label>
+        <div class="row" style="margin-top:12px"><button class="btn" id="lsave">💾 שמירה</button></div></div>
+      ${days.length ? `<div class="card"><h2>📅 מה רשמתי</h2><table class="tbl"><tr><th>תאריך</th><th>דקות</th><th>איך הרגשתי</th></tr>${days.map((d) => `<tr><td>${fmtDate(d)}</td><td>${J[d].min || '–'}${J[d].min >= 10 ? ' ✅' : ''}</td><td>${esc(J[d].feel || '')}</td></tr>`).join('')}</table></div>` : ''}
+      ${wbNav('medit')}`;
+    document.getElementById('mprev').onclick = () => { sessionStorage.setItem('wb_mdate', shift(date, -1)); wbMedit(); };
+    document.getElementById('mnext').onclick = () => { sessionStorage.setItem('wb_mdate', shift(date, 1)); wbMedit(); };
+    document.getElementById('msave').onclick = async () => {
+      try { user = (await api('wb/medit', { date, min: document.getElementById('mmin').value, feel: document.getElementById('mfeel').value })).user; toast('✅ נשמר ביומן'); wbMedit(); }
+      catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
+    document.getElementById('lsave').onclick = async () => {
+      try { user = (await api('wb/medit', { letter: { to: document.getElementById('lto').value, done: document.getElementById('ldone').checked } })).user; toast(document.getElementById('ldone').checked ? '🎉 כל הכבוד!' : '✅ נשמר'); wbMedit(); }
       catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
     };
   }
