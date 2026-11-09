@@ -8,6 +8,11 @@ services:
       DATA_DIR: /data
       PORT: "3000"
       ADMIN_PIN: "${ADMIN_PIN}"
+      WA_TOKEN: "${WA_TOKEN}"
+      WA_PHONE_ID: "${WA_PHONE_ID}"
+      WA_TEMPLATE: "${WA_TEMPLATE:-vamos_reminder}"
+      WA_LANG: "${WA_LANG:-he}"
+      REMINDER_TIME: "${REMINDER_TIME:-15:30}"
     ports:
       - "127.0.0.1:3001:3000"
     volumes:

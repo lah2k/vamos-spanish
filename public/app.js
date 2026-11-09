@@ -533,13 +533,39 @@
       const last = (u.activeDates || []).slice(-1)[0];
       return { ids, avg, last, best, mist: Object.keys(u.mistakes || {}).length };
     };
+    let rem = null;
+    try { rem = await fetch('/api/admin/reminders', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); } catch (e) { rem = null; }
+    const adminPost = (path, body) => fetch('/api/admin/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin }, body: JSON.stringify(body) }).then((r) => r.json());
+    const today = rem && rem.now ? rem.now.date : '';
+    const statusHe = (st) => !st ? 'עוד לא נבדק היום' : st === 'sent' ? '✅ נשלחה תזכורת' : st === 'done-already' ? '🌟 השיעור כבר נעשה – לא נשלחה תזכורת' : st === 'checking' ? 'בבדיקה…' : '⚠️ ' + st;
+    const remCard = rem ? `<div class="card"><h2>📱 תזכורות וואטסאפ</h2>
+      <p style="margin-top:0">${rem.configured ? `✅ מחובר. כל יום בשעה <b>${esc(rem.time)}</b> נבדק מי לא עשה שיעור היום, ונשלחת אליו תזכורת (תבנית: <bdi dir="ltr">${esc(rem.template)}</bdi>).` : '⚠️ וואטסאפ עוד לא מוגדר בשרת.'}</p>
+      ${rem.log && rem.log.length ? `<details><summary>יומן שליחות אחרונות (${rem.log.length})</summary><table class="tbl">${rem.log.slice(0, 15).map((l) => `<tr><td>${fmtDate(l.at)} ${new Date(l.at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td><td dir="ltr" style="text-align:right">${esc(l.email)}</td><td>${l.ok ? '✅ נשלח' : '❌ ' + esc(l.error || '')}</td></tr>`).join('')}</table></details>` : ''}</div>` : '';
     $app.innerHTML = `<div class="row between"><h1>👨‍👩‍👧 אזור הורים</h1><button class="btn ghost" id="out">יציאה מאזור ההורים</button></div>
       <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>שיעורים</th><th>ציון ממוצע</th><th>טעויות פתוחות</th><th>תוקנו</th><th>פעילות אחרונה</th></tr>
       ${users.map((u, k) => { const s = summary(u); return `<tr><td><b>${esc(u.name || '—')}</b></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${s.ids.length}/30</td><td>${s.avg == null ? '–' : s.avg}</td><td>${s.mist}</td><td>${u.fixed || 0}</td><td>${s.last ? fmtDate(s.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="7">אין עדיין משתמשים</td></tr>'}
       </table></div>
+      ${remCard}
       ${users.map((u) => { const s = summary(u); return `<div class="card"><h2>${esc(u.name || u.email)}</h2>
+        <div class="row" style="margin-bottom:12px">
+          <label class="small">📱 טלפון לתזכורות: <input class="search" style="width:190px;margin:0;direction:ltr" data-ph="${esc(u.email)}" value="${esc(u.phone || '')}" placeholder="05X-XXXXXXX"></label>
+          <label class="small"><input type="checkbox" data-off="${esc(u.email)}" ${u.remindersOff ? 'checked' : ''}> השהיית תזכורות</label>
+          <button class="btn ghost" data-save="${esc(u.email)}">שמירה</button>
+          ${u.phone ? `<button class="btn alt" data-test="${esc(u.email)}">שליחת תזכורת לבדיקה</button>` : ''}
+          <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
+        </div>
         <div class="tracker">${LESSONS.map((l) => { const d = u.lessons[l.id]; const at = u.attempts[l.id] || []; return `<div class="day ${d ? 'done' : ''}" title="${esc(l.title)}"><span class="n">${l.id}</span><span>${d ? fmtDate(d.date || d.completedAt) : '–'}</span>${at.length ? `<span>${Math.round(s.best(l.id) * 100)} (${at.length}×)</span>` : ''}</div>`; }).join('')}</div></div>`; }).join('')}`;
     document.getElementById('out').onclick = () => { sessionStorage.removeItem('vamos_pin'); go(user ? '#/home' : '#/'); };
+    $app.querySelectorAll('[data-save]').forEach((b) => b.onclick = async () => {
+      const em = b.dataset.save;
+      const r = await adminPost('phone', { email: em, phone: $app.querySelector(`[data-ph="${em}"]`).value, off: $app.querySelector(`[data-off="${em}"]`).checked });
+      toast(r.user ? '✅ נשמר' : 'שגיאה בשמירה'); viewParent();
+    });
+    $app.querySelectorAll('[data-test]').forEach((b) => b.onclick = async () => {
+      b.disabled = true; b.textContent = 'שולח…';
+      const r = await adminPost('remind-test', { email: b.dataset.test });
+      toast(r.ok ? '✅ התזכורת נשלחה בוואטסאפ' : '❌ השליחה נכשלה: ' + esc(r.error || ''), 6000); viewParent();
+    });
   }
 
   // ---------- router ----------
