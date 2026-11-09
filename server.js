@@ -37,11 +37,44 @@ function allFinished(u) {
   return started.length > 0 && started.every((n) => n >= 30);
 }
 
+// ---------- Well-Being course (private, parent-approved accounts only) ----------
+// The Hebrew translation is kept encrypted in the repo; the key lives only in the server DB (db.settings.wbKey).
+const WB_FILE = path.join(__dirname, 'content-private', 'wb1.enc');
+let wbCache = null;
+function wbContent() {
+  if (wbCache) return wbCache;
+  const key = db.settings && db.settings.wbKey;
+  if (!key) return null;
+  try {
+    const raw = Buffer.from(fs.readFileSync(WB_FILE, 'utf8'), 'base64');
+    const d = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), raw.subarray(0, 12));
+    d.setAuthTag(raw.subarray(12, 28));
+    wbCache = JSON.parse(Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8'));
+    return wbCache;
+  } catch (e) { console.error('wb decrypt', e.message); return null; }
+}
+// PERMA-Profiler (Butler & Kern, 2016) scoring, item numbers 1..23
+const PERMA_SCALES = {
+  P: [3, 13, 22], E: [2, 10, 17], R: [8, 19, 21], M: [7, 9, 20], A: [1, 5, 15],
+  N: [4, 14, 16], H: [6, 12, 18], Lon: [11],
+  overall: [1, 2, 3, 5, 7, 8, 9, 10, 13, 15, 17, 19, 20, 21, 22, 23],
+};
+function permaScores(ans) {
+  const out = {};
+  for (const [k, items] of Object.entries(PERMA_SCALES)) {
+    out[k] = Math.round(items.reduce((s, i) => s + ans[i], 0) / items.length * 100) / 100;
+  }
+  out.Hap = ans[23];
+  return out;
+}
+const wbOf = (u) => (u.wb = u.wb || { read: {}, perma: [], strengths: [], strengthDays: [] });
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let db = { users: {} };
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (_) {}
 if (!db.users) db.users = {};
 if (!db.reminders) db.reminders = { sent: {}, log: [] };
+if (!db.settings) db.settings = {};
 
 let saveTimer = null;
 function save() {
@@ -170,6 +203,13 @@ async function api(req, res, url) {
     return send(res, 200, { users: Object.values(db.users) });
   }
 
+  if (route === '/api/admin/wb-key' && method === 'POST') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    if (!/^[0-9a-f]{64}$/.test(String(body.key || ''))) return send(res, 400, { error: 'bad key' });
+    db.settings.wbKey = body.key; wbCache = null; save();
+    return send(res, 200, { ok: !!wbContent() });
+  }
+
   if (route.startsWith('/api/admin/') && method === 'POST') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     const t = db.users[normEmail(body.email)];
@@ -178,6 +218,10 @@ async function api(req, res, url) {
       const digits = String(body.phone || '').replace(/\D/g, '').replace(/^0/, '972');
       t.phone = digits.length >= 9 ? digits : '';
       t.remindersOff = !!body.off; save();
+      return send(res, 200, { user: t });
+    }
+    if (route === '/api/admin/access') {
+      t.wbAccess = !!body.wb; save();
       return send(res, 200, { user: t });
     }
     if (route === '/api/admin/remind-test') {
@@ -236,6 +280,47 @@ async function api(req, res, url) {
     });
     markActive(u, body.date); save();
     return send(res, 200, { user: publicUser(u) });
+  }
+
+  if (route.startsWith('/api/wb/')) {
+    if (!u.wbAccess) return send(res, 403, { error: 'no access' });
+    const w = wbOf(u);
+    if (route === '/api/wb/content' && method === 'GET') {
+      const c = wbContent();
+      return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
+    }
+    if (route === '/api/wb/read' && method === 'POST') {
+      const sid = String(body.sid || '').slice(0, 40);
+      if (!sid) return send(res, 400, { error: 'bad section' });
+      if (!w.read[sid]) w.read[sid] = DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    if (route === '/api/wb/perma' && method === 'POST') {
+      const a = body.answers || {}; const ans = {};
+      for (let i = 1; i <= 23; i++) {
+        const v = Number(a[i]);
+        if (!(Number.isInteger(v) && v >= 0 && v <= 10)) return send(res, 400, { error: 'missing answer ' + i });
+        ans[i] = v;
+      }
+      const phase = body.phase === 'post' ? 'post' : 'pre';
+      w.perma.push({ at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null, phase, answers: ans, scores: permaScores(ans) });
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    if (route === '/api/wb/strengths' && method === 'POST') {
+      w.strengths = (Array.isArray(body.top) ? body.top : []).map((x) => String(x).slice(0, 40)).slice(0, 5);
+      w.strengthsAt = new Date().toISOString(); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    if (route === '/api/wb/strength-day' && method === 'POST') {
+      if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
+      const i = w.strengthDays.indexOf(body.date);
+      if (i >= 0) w.strengthDays.splice(i, 1); else w.strengthDays.push(body.date);
+      w.strengthDays.sort(); markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    return send(res, 404, { error: 'not found' });
   }
 
   if (route === '/api/flashcards-done' && method === 'POST') {
