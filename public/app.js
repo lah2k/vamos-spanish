@@ -14,7 +14,7 @@
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso.length === 10 ? iso + 'T12:00:00' : iso); return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' }); };
   const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const es = (t) => `<span class="es" lang="es" dir="ltr">${esc(t)}</span>`;
+  const es = (t) => `<span class="es${String(t).length > 22 ? ' long' : ''}" lang="es" dir="ltr">${esc(t)}</span>`;
   // Hebrew text that may contain Spanish fragments: wrap Latin runs so punctuation renders correctly
   const L = 'A-Za-zÁÉÍÓÚÜÑáéíóúüñ';
   const RUN = new RegExp(`([¿¡][${L}0-9 ,'’…\\-]*[?!]|[${L}][${L}0-9 ,'’…\\-]*[${L}0-9])`, 'g');

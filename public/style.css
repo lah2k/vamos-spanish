@@ -20,7 +20,7 @@ h1, h2, h3 { line-height: 1.25; margin: 0 0 .5em; }
 h1 { font-size: 1.8rem; font-weight: 800; }
 h2 { font-size: 1.35rem; font-weight: 700; }
 h3 { font-size: 1.1rem; font-weight: 700; }
-main { flex: 1; width: 100%; max-width: 980px; margin: 0 auto; padding: 18px 16px 40px; }
+main { flex: 1; width: 100%; max-width: 1120px; margin: 0 auto; padding: 18px 16px 40px; }
 
 /* top bar */
 .topbar {
@@ -109,11 +109,13 @@ main { flex: 1; width: 100%; max-width: 980px; margin: 0 auto; padding: 18px 16p
 .steps span.on { background: var(--red); }
 .steps span.done { background: var(--yellow); }
 .steplabel { font-weight: 700; color: var(--red); }
-.vocab { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.vocab { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+@media (max-width: 400px) { .vocab { grid-template-columns: 1fr; } }
 .word { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
 .word .em { font-size: 2rem; flex: none; }
 .word .txt { flex: 1; min-width: 0; }
-.word .es { font-weight: 800; font-size: 1.15rem; color: var(--ink); text-align: right; display: block; }
+.word .es { font-weight: 800; font-size: 1.15rem; color: var(--ink); text-align: right; display: block; white-space: nowrap; }
+.word .es.long { white-space: normal; font-size: 1.05rem; }
 .word .he { font-size: .95rem; }
 .word .pr { font-size: .8rem; color: var(--muted); }
 .say { border: 0; background: var(--teal-l); color: var(--teal); width: 44px; height: 44px; border-radius: 50%; font-size: 1.2rem; flex: none; }
