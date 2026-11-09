@@ -69,6 +69,15 @@ function permaScores(ans) {
   out.Hap = ans[23];
   return out;
 }
+// ---------- course passwords ----------
+// A course with a password stays locked until the user types it once (u.unlocked[course] = true).
+// The well-being course ('wb') is locked until a password is set (or the user was approved earlier).
+const ALL_COURSES = ['es', 'fr', 'wb'];
+const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
+const coursePw = (c) => (db.settings.coursePw || {})[c] || null;
+const courseLocked = (u, c) => !((u.unlocked || {})[c]) && (c === 'wb' || !!coursePw(c));
+const lockMap = (u) => Object.fromEntries(ALL_COURSES.map((c) => [c, courseLocked(u, c) ? (coursePw(c) ? 'password' : 'closed') : 'open']));
+const unlockTries = {};
 const wbOf = (u) => (u.wb = u.wb || { read: {}, perma: [], strengths: [], strengthDays: [] });
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -77,6 +86,8 @@ try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (_) {}
 if (!db.users) db.users = {};
 if (!db.reminders) db.reminders = { sent: {}, log: [] };
 if (!db.settings) db.settings = {};
+// migrate: accounts approved for the well-being course before passwords existed stay unlocked
+for (const u of Object.values(db.users)) if (u.wbAccess) { u.unlocked = u.unlocked || {}; u.unlocked.wb = true; delete u.wbAccess; }
 
 let saveTimer = null;
 function save() {
@@ -104,7 +115,7 @@ function newUser(email, name) {
   };
 }
 
-function publicUser(u) { return u; }
+function publicUser(u) { return Object.assign({}, u, { locks: lockMap(u) }); }
 
 function pinOk(pin) {
   const a = Buffer.from(String(pin || '')), b = Buffer.from(ADMIN_PIN);
@@ -202,9 +213,23 @@ async function api(req, res, url) {
 
   if (route === '/api/admin/users' && method === 'GET') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
-    return send(res, 200, { users: Object.values(db.users) });
+    return send(res, 200, { users: Object.values(db.users).map(publicUser) });
   }
 
+  if (route === '/api/admin/course-passwords' && method === 'GET') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    return send(res, 200, { courses: Object.fromEntries(ALL_COURSES.map((c) => [c, !!coursePw(c)])) });
+  }
+  if (route === '/api/admin/course-password' && method === 'POST') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    if (!ALL_COURSES.includes(body.course)) return send(res, 400, { error: 'bad course' });
+    db.settings.coursePw = db.settings.coursePw || {};
+    const pw = String(body.password || '').trim();
+    if (!pw) delete db.settings.coursePw[body.course];
+    else { const salt = crypto.randomBytes(16).toString('hex'); db.settings.coursePw[body.course] = { salt, hash: pwHash(pw, salt) }; }
+    save();
+    return send(res, 200, { ok: true, set: !!pw });
+  }
   if (route === '/api/admin/wb-key' && method === 'POST') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     if (!/^[0-9a-f]{64}$/.test(String(body.key || ''))) return send(res, 400, { error: 'bad key' });
@@ -222,10 +247,6 @@ async function api(req, res, url) {
       t.remindersOff = !!body.off; save();
       return send(res, 200, { user: t });
     }
-    if (route === '/api/admin/access') {
-      t.wbAccess = !!body.wb; save();
-      return send(res, 200, { user: t });
-    }
     if (route === '/api/admin/remind-test') {
       return send(res, 200, await sendWhatsApp(t, body.template));
     }
@@ -237,6 +258,17 @@ async function api(req, res, url) {
 
   const u = getUser(req);
   if (!u) return send(res, 401, { error: 'not logged in' });
+
+  if (route === '/api/unlock' && method === 'POST') {
+    const c = body.course; const pw = coursePw(c);
+    if (!ALL_COURSES.includes(c) || !pw) return send(res, 400, { error: 'no password for this course' });
+    const t = unlockTries[u.email] = (unlockTries[u.email] || []).filter((x) => Date.now() - x < 3600e3);
+    if (t.length >= 10) return send(res, 429, { error: 'too many tries' });
+    const ok = crypto.timingSafeEqual(Buffer.from(pwHash(String(body.password || '').trim(), pw.salt), 'hex'), Buffer.from(pw.hash, 'hex'));
+    if (!ok) { t.push(Date.now()); return send(res, 403, { error: 'wrong password' }); }
+    u.unlocked = u.unlocked || {}; u.unlocked[c] = true; save();
+    return send(res, 200, { user: publicUser(u) });
+  }
 
   if (route === '/api/me' && method === 'GET') return send(res, 200, { user: publicUser(u) });
 
@@ -285,7 +317,7 @@ async function api(req, res, url) {
   }
 
   if (route.startsWith('/api/wb/')) {
-    if (!u.wbAccess) return send(res, 403, { error: 'no access' });
+    if (courseLocked(u, 'wb')) return send(res, 403, { error: 'locked' });
     const w = wbOf(u);
     if (route === '/api/wb/modules' && method === 'GET') {
       return send(res, 200, { modules: wbModules().map((m) => { const c = wbContent(m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
@@ -293,6 +325,14 @@ async function api(req, res, url) {
     if (route === '/api/wb/content' && method === 'GET') {
       const c = wbContent(url.searchParams.get('m') || 1);
       return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
+    }
+    if (route === '/api/wb/kindlog' && method === 'POST') {
+      if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
+      w.kindlog = w.kindlog || {};
+      const kind = String(body.kind || '').trim().slice(0, 500), conn = String(body.conn || '').trim().slice(0, 500);
+      if (!kind && !conn) delete w.kindlog[body.date]; else w.kindlog[body.date] = { kind, conn, at: new Date().toISOString() };
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
     }
     if (route === '/api/wb/quiz' && method === 'POST') {
       const m = String(Number(body.m) || 0), score = Number(body.score), total = Number(body.total);

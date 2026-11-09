@@ -249,8 +249,28 @@
     document.title = !info ? 'לומדים שפות – ספרדית וצרפתית בכיף' : info.code === 'he' ? info.brand : `${info.brand} – ${info.name} בכיף`;
   }
 
+  const locked = (c) => !!(user && user.locks && user.locks[c] && user.locks[c] !== 'open');
+  function viewUnlock(c) {
+    const name = c === 'wb' ? 'המדע של האושר' : (COURSES[c] || {}).name || c;
+    const closed = user.locks && user.locks[c] === 'closed';
+    $app.innerHTML = `<div class="card login"><div class="hero">🔒</div><h1>${esc(name)}</h1>
+      ${closed ? '<p class="muted">הקורס הזה עוד לא נפתח. נסו שוב בקרוב 🙂</p>' : `<p class="muted">הקורס מוגן בסיסמה. הסיסמה נדרשת פעם אחת בלבד.</p>
+      <form id="uf"><input type="password" id="upw" placeholder="סיסמת הקורס" style="text-align:center" autocomplete="off"><div class="err" id="uerr"></div><button class="btn" style="width:100%">פתיחה</button></form>`}
+      <p><a href="#/courses">→ חזרה לבחירת קורס</a></p></div>`;
+    const f = document.getElementById('uf'); if (!f) return;
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      try { user = (await api('unlock', { course: c, password: document.getElementById('upw').value })).user; toast('🔓 הקורס נפתח!'); if (c === 'wb') go('#/wb'); else { setCourse(c); go('#/home'); } }
+      catch (er) { document.getElementById('uerr').textContent = er.status === 429 ? 'יותר מדי ניסיונות. נסו שוב בעוד שעה.' : 'הסיסמה לא נכונה'; }
+    };
+  }
   function wbCard() {
     const w = WB(); const n = Object.keys(w.read).length + (w.perma.length ? 1 : 0) + (w.strengths.length ? 1 : 0);
+    if (locked('wb')) return `<a class="card lcard" href="#/unlock/wb" style="padding:24px;flex-wrap:wrap">
+      <span class="em" style="font-size:2.6rem;width:72px;height:72px">😊</span>
+      <span style="flex:1 1 180px"><h2 style="margin:0">המדע של האושר 🔒</h2>
+      <span class="small muted">לפי הקורס של פרופ׳ לורי סנטוס · סרטונים, קריאה ושאלונים</span></span>
+      <span class="btn ghost" style="flex:1 1 100%">${user.locks.wb === 'closed' ? 'בקרוב' : '🔑 הזנת סיסמה'}</span></a>`;
     return `<a class="card lcard" href="#/wb" style="padding:24px;flex-wrap:wrap">
       <span class="em" style="font-size:2.6rem;width:72px;height:72px">😊</span>
       <span style="flex:1 1 180px"><h2 style="margin:0">המדע של האושר</h2>
@@ -263,18 +283,18 @@
     const card = (c) => {
       const info = COURSES[c]; const d = c === 'es' ? user : (user.courses && user.courses[c]) || EMPTY;
       const n = Object.keys(d.lessons).length;
-      return `<a class="card lcard" href="#/home" data-course="${c}" style="padding:24px;flex-wrap:wrap">
+      return `<a class="card lcard" href="${locked(c) ? '#/unlock/' + c : '#/home'}" data-course="${c}" style="padding:24px;flex-wrap:wrap">
         <span class="em" style="font-size:2.6rem;width:72px;height:72px">${info.flag}</span>
         <span style="flex:1 1 180px"><h2 style="margin:0">${info.name} <bdi dir="ltr" lang="${c}" class="muted small">${esc(info.brand)}</bdi></h2>
         <span class="small muted">30 שיעורים למתחילים · כ-20 דקות ליום</span>
         <div class="bar" style="margin-top:8px"><i style="width:${n / 30 * 100}%"></i></div>
         <span class="small">${n ? `סיימתם ${n} מתוך 30` : 'עוד לא התחלתם'}</span></span>
-        <span class="btn" style="flex:1 1 100%">${n ? 'להמשיך' : 'להתחיל'} ←</span></a>`;
+        <span class="btn" style="flex:1 1 100%">${locked(c) ? '🔒 הזנת סיסמה' : n ? 'להמשיך ←' : 'להתחיל ←'}</span></a>`;
     };
-    $app.innerHTML = `<h1>איזו שפה לומדים היום, ${esc(user.name)}? 🌍</h1>
+    $app.innerHTML = `<h1>מה לומדים היום, ${esc(user.name)}? 🌍</h1>
       <p class="muted">כל קורס נשמר בנפרד – אפשר ללמוד כמה קורסים ולעבור ביניהם מתי שרוצים.</p>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${card('es')}${card('fr')}${user.wbAccess ? wbCard() : ''}</div>`;
-    $app.querySelectorAll('[data-course]').forEach((a) => a.onclick = () => { setCourse(a.dataset.course); });
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${card('es')}${card('fr')}${wbCard()}</div>`;
+    $app.querySelectorAll('[data-course]').forEach((a) => a.onclick = () => { if (!locked(a.dataset.course)) setCourse(a.dataset.course); });
   }
 
   function viewHome() {
@@ -621,12 +641,12 @@
   }
 
   function wbParent(u) {
-    const w = u.wb; if (!u.wbAccess && !w) return '';
+    const w = u.wb; if (!w) return '';
     if (!w) return '<h3 style="margin-top:14px">😊 המדע של האושר – עוד לא התחיל/ה</h3>';
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
   }
 
   async function viewParent() {
@@ -661,6 +681,13 @@
     try { rem = await fetch('/api/admin/reminders', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); } catch (e) { rem = null; }
     const adminPost = (path, body) => fetch('/api/admin/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin }, body: JSON.stringify(body) }).then((r) => r.json());
     const today = rem && rem.now ? rem.now.date : '';
+    let pws = {}; try { pws = (await fetch('/api/admin/course-passwords', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json())).courses || {}; } catch (e) {}
+    const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : c === 'wb' ? '⛔ סגור (עוד לא הוגדרה סיסמה)' : '🔓 פתוח לכולם'}</td>
+      <td><input class="search" style="width:170px;margin:0" type="text" autocomplete="off" data-cpwin="${c}" placeholder="${pws[c] ? 'סיסמה חדשה' : 'סיסמה'}"></td>
+      <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''}</td></tr>`;
+    const pwCard = `<div class="card"><h2>🔑 סיסמאות לקורסים</h2>
+      <p class="small muted" style="margin-top:0">מי שמכיר/ה את הסיסמה פותח/ת את הקורס פעם אחת, והוא נשאר פתוח בחשבון שלו/ה. "המדע של האושר" סגור עד שמגדירים לו סיסמה (מי שכבר אושר/ה קודם נשאר/ה עם גישה).</p>
+      <table class="tbl">${pwRow('wb', '😊 המדע של האושר')}${pwRow('es', '🇪🇸 ספרדית')}${pwRow('fr', '🇫🇷 צרפתית')}</table></div>`;
     const statusHe = (st) => !st ? 'עוד לא נבדק היום' : st === 'sent' ? '✅ נשלחה תזכורת' : st === 'done-already' ? '🌟 השיעור כבר נעשה – לא נשלחה תזכורת' : st === 'checking' ? 'בבדיקה…' : '⚠️ ' + st;
     const remCard = rem ? `<div class="card"><h2>📱 תזכורות וואטסאפ</h2>
       <p style="margin-top:0">${rem.configured ? `✅ מחובר. כל יום בשעה <b>${esc(rem.time)}</b> נבדק מי לא עשה שיעור היום, ונשלחת אליו תזכורת (תבנית: <bdi dir="ltr">${esc(rem.template)}</bdi>).` : '⚠️ וואטסאפ עוד לא מוגדר בשרת.'}</p>
@@ -669,20 +696,22 @@
       <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>🇪🇸 ספרדית</th><th>🇫🇷 צרפתית</th><th>טעויות פתוחות</th><th>פעילות אחרונה</th></tr>
       ${users.map((u) => { const a = summary(u, 'es'), b = summary(u, 'fr'); return `<tr><td><b>${esc(u.name || '—')}</b></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${a.ids.length}/30 · ${a.avg == null ? '–' : a.avg}</td><td>${dataOf(u, 'fr') ? `${b.ids.length}/30 · ${b.avg == null ? '–' : b.avg}` : '–'}</td><td>${a.mist + b.mist}</td><td>${a.last ? fmtDate(a.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6">אין עדיין משתמשים</td></tr>'}
       </table></div>
-      ${remCard}
+      ${remCard}${pwCard}
       ${users.map((u) => `<div class="card"><h2>${esc(u.name || u.email)}</h2>
         <div class="row" style="margin-bottom:12px">
           <label class="small">📱 טלפון לתזכורות: <input class="search" style="width:190px;margin:0;direction:ltr" data-ph="${esc(u.email)}" value="${esc(u.phone || '')}" placeholder="05X-XXXXXXX"></label>
           <label class="small"><input type="checkbox" data-off="${esc(u.email)}" ${u.remindersOff ? 'checked' : ''}> השהיית תזכורות</label>
-          <label class="small"><input type="checkbox" data-wb="${esc(u.email)}" ${u.wbAccess ? 'checked' : ''}> 😊 גישה ל"המדע של האושר"</label>
           <button class="btn ghost" data-save="${esc(u.email)}">שמירה</button>
           ${u.phone ? `<button class="btn alt" data-test="${esc(u.email)}">שליחת תזכורת לבדיקה</button>` : ''}
           <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
         </div>
         ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}${wbParent(u)}</div>`).join('')}`;
-    $app.querySelectorAll('[data-wb]').forEach((c) => c.onchange = async () => {
-      const r = await adminPost('access', { email: c.dataset.wb, wb: c.checked });
-      toast(r.user ? (c.checked ? '✅ ניתנה גישה לקורס "המדע של האושר"' : 'הגישה הוסרה') : 'שגיאה בשמירה');
+    $app.querySelectorAll('[data-cpw]').forEach((b) => b.onclick = async () => {
+      const c = b.dataset.cpw, inp = $app.querySelector(`[data-cpwin="${c}"]`);
+      const clear = b.dataset.clear === '1';
+      if (!clear && !inp.value.trim()) return toast('נא להקליד סיסמה');
+      const r = await adminPost('course-password', { course: c, password: clear ? '' : inp.value });
+      toast(r.ok ? (r.set ? '✅ הסיסמה נשמרה' : 'הסיסמה הוסרה') : 'שגיאה בשמירה'); viewParent();
     });
     document.getElementById('out').onclick = () => { sessionStorage.removeItem('vamos_pin'); go(user ? '#/home' : '#/'); };
     $app.querySelectorAll('[data-save]').forEach((b) => b.onclick = async () => {
@@ -736,6 +765,7 @@
       s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
     }
+    if (CUR === 3) s.push({ key: 'kindlog', href: '#/wb/3/kindlog', title: 'היומן שלי: טוב לב וקשר חברתי', icon: '🤝', done: Object.keys(WB().kindlog || {}).length > 0 });
     if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
     if (WBC.quiz) s.push({ key: 'quiz', href: `#/wb/${CUR}/quiz`, title: `בוחן מודול ${CUR}`, icon: '📝', done: !!((WB().quiz || {})[CUR] || []).length });
     s.push({ key: 'review', href: `#/wb/${CUR}/review`, title: WBC.review.title, sid: CUR === 1 ? 'review' : `m${CUR}:review`, icon: '❓' });
@@ -745,7 +775,7 @@
   const wbMark = async (sid) => { if (!WB().read[sid]) { try { user = (await api('wb/read', { sid, date: today() })).user; } catch (e) {} } };
   async function viewWb(parts) {
     parts = parts.slice();
-    if (!user.wbAccess) { toast('הקורס הזה פתוח רק לחשבונות שאושרו באזור ההורים'); return go('#/courses'); }
+    if (locked('wb')) return viewUnlock('wb');
     if (parts[1] && !/^\d+$/.test(parts[1])) parts.splice(1, 0, '1'); // old links: #/wb/perma -> #/wb/1/perma
     try {
       if (!WBMODS) WBMODS = (await api('wb/modules')).modules;
@@ -758,13 +788,14 @@
     if (sub === 'perma') return wbPerma(parts[2]);
     if (sub === 'via') return wbVia();
     if (sub === 'journal') return wbJournal();
+    if (sub === 'kindlog') return wbKindlog();
     if (sub === 'review') return wbReview();
     if (sub === 'quiz') return wbQuiz();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
     const next = steps.find((x) => !x.done);
     const last = WB().perma.slice(-1)[0];
     $app.innerHTML = `<div class="card hello">
-        <div class="row between"><h1 style="margin:0">😊 ${esc(WBC.moduleTitle)}</h1><a class="pill" href="#/wb" style="text-decoration:none">📚 כל המודולים</a></div>
+        <div class="row between"><h1 style="margin:0">😊 ${esc(WBC.moduleTitle)}</h1><a class="pill" href="#/wb" style="text-decoration:none">📚 כל הקורס</a></div>
         <p style="margin:6px 0 0">המדע של האושר · לפי הקורס של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
         <div style="margin-top:14px" class="bar"><i style="width:${n / steps.length * 100}%"></i></div>
         <p class="small muted">${n} מתוך ${steps.length} חלקים הושלמו</p>
@@ -783,6 +814,7 @@
     const s = WBC.sections[i]; if (!s) return go('#/wb/' + CUR);
     let html = s.html.replace('@@FIG@@', WB_FIG);
     if (/^משימת/.test(s.title) && CUR === 1) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/1/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/1/via">💪 לבחור חוזקות</a></div>`;
+    if (/^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
     $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
       <article class="card wbtext"><h1>${s.title}</h1>${html}</article>${wbNav('s' + i)}`;
@@ -870,17 +902,45 @@
     render();
   }
 
-  function wbOverview() {
-    const r = WB().read;
-    const card = (m) => {
-      const done = m.sections.filter((id) => r[id]).length;
-      return `<a class="card lcard" href="#/wb/${m.module}" style="padding:18px"><span class="em">${m.module}</span>
-        <span style="flex:1"><h2 style="margin:0">${esc(m.title)}</h2><div class="bar" style="margin-top:8px"><i style="width:${done / m.sections.length * 100}%"></i></div>
-        <span class="small muted">${done ? `${done} מתוך ${m.sections.length} חלקים נקראו` : 'עוד לא התחלתם'}</span></span></a>`;
-    };
+  async function wbOverview() {
+    await Promise.all(WBMODS.map((m) => WBM[m.module] ? null : api('wb/content?m=' + m.module).then((r) => { WBM[m.module] = r.content; })));
+    const keep = [CUR, WBC];
+    const mods = WBMODS.map((m) => { CUR = m.module; WBC = WBM[m.module]; return { m, steps: wbSteps() }; });
+    [CUR, WBC] = keep;
+    const all = mods.flatMap((x) => x.steps); const n = all.filter((x) => x.done).length;
+    const next = mods.map((x) => ({ x, st: x.steps.find((y) => !y.done) })).find((y) => y.st);
     $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">😊 המדע של האושר</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
-      <p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p></div>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${WBMODS.map(card).join('')}</div>`;
+      <p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
+      <div style="margin-top:14px" class="bar"><i style="width:${n / all.length * 100}%"></i></div>
+      <p class="small muted">${n} מתוך ${all.length} חלקים הושלמו · ${WBMODS.length} מודולים</p>
+      <div class="row">${next ? `<a class="btn big" href="${next.st.href}">${next.st.icon} ${n ? 'להמשיך' : 'להתחיל'}: מודול ${next.x.m.module} – ${next.st.title}</a>` : '<span class="pill ok">🎉 סיימתם את כל המודולים שכאן!</span>'}</div></div>
+      ${mods.map(({ m, steps }) => { const d = steps.filter((x) => x.done).length; return `<div class="card"><div class="row between"><h2 style="margin:0"><a href="#/wb/${m.module}" style="color:inherit;text-decoration:none">${esc(m.title)}</a></h2><span class="pill ${d === steps.length ? 'ok' : ''}">${d}/${steps.length}</span></div>
+        <div class="wbsteps" style="margin-top:12px">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b></span></a>`).join('')}</div></div>`; }).join('')}`;
+  }
+  function wbKindlog() {
+    const J = WB().kindlog || {}; const t = today();
+    let date = sessionStorage.getItem('wb_kdate') || t; if (date > t) date = t;
+    const e = J[date] || { kind: '', conn: '' };
+    const days = Object.keys(J).sort().reverse();
+    const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+      <div class="card"><h1>🤝 היומן שלי: טוב לב וקשר חברתי</h1>
+      <p class="muted">7 ימים: כל ערב רושמים איזה מעשה טוב עשיתם היום, ועם מי יצרתם קשר. הכול נשמר בחשבון שלכם.</p>
+      <div class="row"><span class="big7">${Array.from({ length: 7 }, (_, i) => `<span class="dot ${i < days.length ? 'on' : ''}"></span>`).join('')}</span><span class="small muted">${days.length}/7 ימים</span></div></div>
+      <div class="card"><div class="row between"><button class="btn ghost" id="kprev">→ יום קודם</button><h2 style="margin:0">${date === t ? 'היום' : fmtDate(date)}</h2><button class="btn ghost" id="knext" ${date >= t ? 'disabled' : ''}>יום הבא ←</button></div>
+        <h3 style="margin-top:16px">💛 המעשה הטוב שלי היום</h3>
+        <textarea id="kkind" class="search" rows="3" style="width:100%;resize:vertical" placeholder="למשל: עזרתי לאחי בשיעורי הבית">${esc(e.kind)}</textarea>
+        <h3>🗣️ הקשר החברתי שלי היום</h3>
+        <textarea id="kconn" class="search" rows="3" style="width:100%;resize:vertical" placeholder="למשל: שאלתי את המוכרת בקנטינה איך עבר עליה היום – היא חייכה">${esc(e.conn)}</textarea>
+        <div class="row" style="margin-top:12px"><button class="btn" id="ksave">💾 שמירה</button></div></div>
+      ${days.length ? `<div class="card"><h2>📅 מה כתבתי</h2>${days.map((d) => `<details class="wbq"><summary><b>${fmtDate(d)}</b> ${J[d].kind ? '· 💛 ' + esc(J[d].kind.slice(0, 50)) : ''}</summary><div class="ans">${J[d].kind ? `<p>💛 ${esc(J[d].kind)}</p>` : ''}${J[d].conn ? `<p>🗣️ ${esc(J[d].conn)}</p>` : ''}</div></details>`).join('')}</div>` : ''}
+      ${wbNav('kindlog')}`;
+    document.getElementById('kprev').onclick = () => { sessionStorage.setItem('wb_kdate', shift(date, -1)); wbKindlog(); };
+    document.getElementById('knext').onclick = () => { sessionStorage.setItem('wb_kdate', shift(date, 1)); wbKindlog(); };
+    document.getElementById('ksave').onclick = async () => {
+      try { user = (await api('wb/kindlog', { date, kind: document.getElementById('kkind').value, conn: document.getElementById('kconn').value })).user; toast('✅ נשמר ביומן'); wbKindlog(); }
+      catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
   }
   function wbQuiz() {
     const Q = WBC.quiz || []; let i = 0, score = 0; const wrong = []; const hist = (WB().quiz || {})[CUR] || [];
@@ -970,7 +1030,10 @@
     document.getElementById('username').textContent = '👤 ' + user.name;
     setBrand(r === 'courses' ? null : r === 'wb' ? WBINFO : INFO);
     document.getElementById('mainnav').style.visibility = r === 'wb' ? 'hidden' : '';
+    if (r === 'courses' || r === 'unlock' || (r === 'wb' && locked('wb'))) { try { user = (await api('me')).user; } catch (e) {} }
     if (r === 'wb') { if ('speechSynthesis' in window) speechSynthesis.cancel(); return viewWb(parts); }
+    if (r === 'unlock') { setBrand(null); return viewUnlock(parts[1]); }
+    if (r !== 'courses' && locked(COURSE)) return go('#/unlock/' + COURSE);
     if (!localStorage.getItem('vamos_course') && r !== 'courses') return go('#/courses');
     const navKey = { courses: 'home', lesson: 'lessons', quiz: 'quizzes', results: 'quizzes', mistakes: 'quizzes', certificate: 'badges' }[r] || r;
     document.querySelectorAll('#mainnav a').forEach((a) => a.classList.toggle('on', a.dataset.r === navKey));
