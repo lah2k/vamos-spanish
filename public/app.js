@@ -67,6 +67,8 @@
   const FEMALE_RE = /(am[eé]lie|audrey|aur[eé]lie|marie|julie|hortense|denise|elo[iï]se|c[eé]leste|chantal|sylvie|brigitte|vivienne|coralie|jacqueline|jos[eé]phine|yvette|google fran[cç]ais|helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|laia|lia\b|catalina|marta|nuria|carmen|renata|valentina|yolanda|google espa[nñ]ol|female|mujer)/i;
   const MALE_RE = /(thomas|henri|\bpaul\b|claude|r[eé]my|j[eé]r[oô]me|alain|antoine|nicolas|guillaume|maurice|yves|fabrice|mathieu|pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|\bteo\b|sergio|el[ií]as|saul|sa[uú]l|nil\b|gerardo|esteban|cristian|federico|tom[aá]s|alberto|male\b|hombre)/i;
   const SPEAKER_GENDER = { 'לוסי': 'f', 'קלואה': 'f', 'תום': 'm', 'פייר': 'm', 'שני': 'f', 'אנה': 'f', 'מאיה': 'f', 'אמא': 'f', 'מוכרת': 'f', 'רופאה': 'f', 'לאו': 'm', 'קרלוס': 'm', 'אבא': 'm', 'מלצר': 'm', 'איש': 'm', 'מורה': 'm' };
+  const MALE_ALT_RE = /\b(eddy|reed|rocko|grandpa)\b/i;
+  const FEMALE_ALT_RE = /\b(flo|grandma|sandy|shelley)\b/i;
   let esVoice = null, femaleVoice = null, maleVoice = null;
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
@@ -76,7 +78,12 @@
     vs.sort((a, b) => rank(a) - rank(b));
     esVoice = vs[0] || null;
     femaleVoice = vs.find((v) => FEMALE_RE.test(v.name)) || null;
-    maleVoice = vs.find((v) => MALE_RE.test(v.name) && !FEMALE_RE.test(v.name)) || null;
+    maleVoice = vs.find((v) => MALE_RE.test(v.name) && !FEMALE_RE.test(v.name))
+      || vs.find((v) => MALE_ALT_RE.test(v.name)) || null;
+    if (!femaleVoice) femaleVoice = vs.find((v) => FEMALE_ALT_RE.test(v.name)) || null;
+    // never use a novelty voice as the default voice for words
+    const plain = vs.filter((v) => !MALE_ALT_RE.test(v.name) && !FEMALE_ALT_RE.test(v.name));
+    if (plain.length) esVoice = plain[0];
     // Google's plain "español" voice is female
     if (!femaleVoice) femaleVoice = vs.find((v) => /google/i.test(v.name)) || null;
     // the user's own choice (from the voice picker) wins
@@ -109,7 +116,7 @@
     const distinct = fv && mv && fv !== mv;
     let v = esVoice, pitch = 1;
     if (gender === 'f') { v = fv; if (!distinct) pitch = 1.2; }
-    if (gender === 'm') { v = mv; if (!distinct) pitch = 0.75; }
+    if (gender === 'm') { v = mv; if (!distinct) pitch = 0.6; }
     u.lang = v ? v.lang : INFO.tts; if (v) u.voice = v;
     u.rate = slow ? 0.55 : 0.85; u.pitch = pitch;
     return u;
@@ -188,7 +195,7 @@
 
   // ---------- views ----------
   function viewLogin(mode) {
-    mode = mode || 'login';
+    mode = mode || 'login'; setBrand(null);
     document.getElementById('topbar').hidden = true;
     const su = mode === 'signup';
     $app.innerHTML = `
@@ -232,6 +239,14 @@
         if (t) t.onclick = (ev) => { ev.preventDefault(); viewLogin(t.id === 'toSu' ? 'signup' : 'login'); document.getElementById('em').value = email; };
       }
     };
+  }
+
+  function setBrand(info) {
+    document.getElementById('brandflag').textContent = info ? info.flag : '🌍';
+    const n = document.getElementById('brandname');
+    n.textContent = info ? info.brand : 'לומדים שפות';
+    n.lang = info ? info.code : 'he'; n.dir = info ? 'ltr' : 'rtl';
+    document.title = info ? `${info.brand} – ${info.name} בכיף` : 'לומדים שפות – ספרדית וצרפתית בכיף';
   }
 
   function viewCourses() {
@@ -663,7 +678,7 @@
   async function route() {
     const parts = (location.hash.replace(/^#\/?/, '') || 'home').split('/');
     const r = parts[0];
-    if (r === 'parent') return viewParent();
+    if (r === 'parent') { setBrand(null); return viewParent(); }
     if (!user) {
       const saved = localStorage.getItem('vamos_email');
       if (saved) {
@@ -673,9 +688,7 @@
     }
     document.getElementById('topbar').hidden = false;
     document.getElementById('username').textContent = '👤 ' + user.name;
-    document.getElementById('brandflag').textContent = INFO.flag;
-    document.getElementById('brandname').textContent = INFO.brand;
-    document.getElementById('brandname').lang = INFO.code;
+    setBrand(r === 'courses' ? null : INFO);
     if (!localStorage.getItem('vamos_course') && r !== 'courses') return go('#/courses');
     const navKey = { courses: 'home', lesson: 'lessons', quiz: 'quizzes', results: 'quizzes', mistakes: 'quizzes', certificate: 'badges' }[r] || r;
     document.querySelectorAll('#mainnav a').forEach((a) => a.classList.toggle('on', a.dataset.r === navKey));
