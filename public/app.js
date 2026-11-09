@@ -41,28 +41,45 @@
   }
 
   // ---------- speech ----------
-  let esVoice = null;
+  // Two distinct Spanish voices: female speakers get a woman's voice, male speakers a man's voice.
+  const FEMALE_RE = /(helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|female|mujer)/i;
+  const MALE_RE = /(pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|teo|sergio|male\b|hombre)/i;
+  const SPEAKER_GENDER = { 'שני': 'f', 'אנה': 'f', 'מאיה': 'f', 'אמא': 'f', 'מוכרת': 'f', 'רופאה': 'f', 'לאו': 'm', 'קרלוס': 'm', 'אבא': 'm', 'מלצר': 'm', 'איש': 'm', 'מורה': 'm' };
+  let esVoice = null, femaleVoice = null, maleVoice = null;
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
-    const vs = speechSynthesis.getVoices();
-    esVoice = vs.find((v) => /^es[-_]ES/i.test(v.lang)) || vs.find((v) => /^es[-_]MX/i.test(v.lang)) || vs.find((v) => /^es/i.test(v.lang)) || null;
+    const vs = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang));
+    const rank = (v) => (/^es[-_]ES/i.test(v.lang) ? 0 : /^es[-_]MX/i.test(v.lang) ? 1 : 2) + (/natural|online|google/i.test(v.name) ? -0.5 : 0);
+    vs.sort((a, b) => rank(a) - rank(b));
+    esVoice = vs[0] || null;
+    femaleVoice = vs.find((v) => FEMALE_RE.test(v.name)) || null;
+    maleVoice = vs.find((v) => MALE_RE.test(v.name) && !FEMALE_RE.test(v.name)) || null;
+    // Google's plain "español" voice is female
+    if (!femaleVoice) femaleVoice = vs.find((v) => /google/i.test(v.name)) || null;
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-  function speak(text, slow, btn) {
+  function utter(text, slow, gender) {
+    const u = new SpeechSynthesisUtterance(String(text).replace(/\s*\/\s*/g, ', '));
+    const fv = femaleVoice || esVoice, mv = maleVoice || esVoice;
+    const distinct = fv && mv && fv !== mv;
+    let v = esVoice, pitch = 1;
+    if (gender === 'f') { v = fv; if (!distinct) pitch = 1.2; }
+    if (gender === 'm') { v = mv; if (!distinct) pitch = 0.75; }
+    u.lang = v ? v.lang : 'es-ES'; if (v) u.voice = v;
+    u.rate = slow ? 0.55 : 0.85; u.pitch = pitch;
+    return u;
+  }
+  function speak(text, slow, btn, gender) {
     if (!('speechSynthesis' in window)) { toast('הדפדפן הזה לא תומך בהשמעת קול 😕'); return; }
     speechSynthesis.cancel();
-    // speak the Spanish without slashes ("alto / alta" -> "alto, alta")
-    const u = new SpeechSynthesisUtterance(String(text).replace(/\s*\/\s*/g, ', '));
-    u.lang = esVoice ? esVoice.lang : 'es-ES';
-    if (esVoice) u.voice = esVoice;
-    u.rate = slow ? 0.55 : 0.85;
+    const u = utter(text, slow, gender);
     if (btn) { btn.classList.add('playing'); u.onend = u.onerror = () => btn.classList.remove('playing'); }
     speechSynthesis.speak(u);
     if (!esVoice && !speak._warned) { speak._warned = true; setTimeout(() => { if (!esVoice) toast('טיפ: אם לא שומעים ספרדית טובה, אפשר להתקין קול ספרדי בהגדרות המכשיר (שפה ודיבור).', 5000); }, 800); }
   }
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-say]');
-    if (b) { e.preventDefault(); e.stopPropagation(); speak(b.dataset.say, b.dataset.slow === '1', b); }
+    if (b) { e.preventDefault(); e.stopPropagation(); speak(b.dataset.say, b.dataset.slow === '1', b, b.dataset.g); }
   });
   const sayBtns = (t) => `<button class="say" data-say="${esc(t)}" title="השמעה" aria-label="השמעה">🔊</button><button class="say slow" data-say="${esc(t)}" data-slow="1" title="השמעה איטית" aria-label="השמעה איטית">🐢</button>`;
 
@@ -260,8 +277,8 @@
         <label class="small"><input type="checkbox" id="hideTr"> הסתרת התרגום</label>
         <div class="dlg" style="margin-top:12px">${l.dialogue.map((d) => `
           <div class="bubble ${speakers.indexOf(d.who) % 2 ? 'b' : ''}">
-            <button class="say" data-say="${esc(d.es)}">🔊</button>
-            <span><span class="who">${esc(d.who)}</span>${es(d.es)}<span class="tr small">${esc(d.he)}</span></span>
+            <button class="say" data-say="${esc(d.es)}" data-g="${SPEAKER_GENDER[d.who] || ''}">🔊</button>
+            <span><span class="who">${SPEAKER_GENDER[d.who] === 'm' ? '👨' : SPEAKER_GENDER[d.who] === 'f' ? '👩' : ''} ${esc(d.who)}</span>${es(d.es)}<span class="tr small">${esc(d.he)}</span></span>
           </div>`).join('')}</div>
         <div class="row" style="margin-top:14px"><button class="btn ghost" id="playAll">▶️ השמעת כל השיחה</button></div></div>${nav('לתרגול')}`;
     } else if (s.k === 'practice') {
@@ -278,7 +295,7 @@
       document.getElementById('playAll').onclick = () => {
         if (!('speechSynthesis' in window)) return toast('הדפדפן הזה לא תומך בהשמעת קול');
         speechSynthesis.cancel();
-        l.dialogue.forEach((d) => { const u = new SpeechSynthesisUtterance(d.es); u.lang = esVoice ? esVoice.lang : 'es-ES'; if (esVoice) u.voice = esVoice; u.rate = 0.85; speechSynthesis.speak(u); });
+        l.dialogue.forEach((d) => speechSynthesis.speak(utter(d.es, false, SPEAKER_GENDER[d.who])));
       };
     }
     if (s.k === 'practice') matchGame(document.getElementById('match'), l.vocab);
