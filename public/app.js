@@ -42,8 +42,8 @@
 
   // ---------- speech ----------
   // Two distinct Spanish voices: female speakers get a woman's voice, male speakers a man's voice.
-  const FEMALE_RE = /(helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|female|mujer)/i;
-  const MALE_RE = /(pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|teo|sergio|male\b|hombre)/i;
+  const FEMALE_RE = /(helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|laia|lia\b|catalina|marta|nuria|carmen|renata|valentina|yolanda|google espa[nñ]ol|female|mujer)/i;
+  const MALE_RE = /(pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|\bteo\b|sergio|el[ií]as|saul|sa[uú]l|nil\b|gerardo|esteban|cristian|federico|tom[aá]s|alberto|male\b|hombre)/i;
   const SPEAKER_GENDER = { 'שני': 'f', 'אנה': 'f', 'מאיה': 'f', 'אמא': 'f', 'מוכרת': 'f', 'רופאה': 'f', 'לאו': 'm', 'קרלוס': 'm', 'אבא': 'm', 'מלצר': 'm', 'איש': 'm', 'מורה': 'm' };
   let esVoice = null, femaleVoice = null, maleVoice = null;
   function pickVoice() {
@@ -56,6 +56,28 @@
     maleVoice = vs.find((v) => MALE_RE.test(v.name) && !FEMALE_RE.test(v.name)) || null;
     // Google's plain "español" voice is female
     if (!femaleVoice) femaleVoice = vs.find((v) => /google/i.test(v.name)) || null;
+    // the user's own choice (from the voice picker) wins
+    let pref = {}; try { pref = JSON.parse(localStorage.getItem('vamos_voices') || '{}'); } catch (e) {}
+    if (pref.f) femaleVoice = vs.find((v) => v.name === pref.f) || femaleVoice;
+    if (pref.m) maleVoice = vs.find((v) => v.name === pref.m) || maleVoice;
+  }
+  function voicePicker(el) {
+    const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)) : [];
+    if (!vs.length) { el.innerHTML = '<p class="small muted">לא נמצאו קולות ספרדיים במכשיר הזה. אפשר להוסיף קול ספרדי בהגדרות השפה והדיבור של המכשיר.</p>'; return; }
+    const opt = (sel) => vs.map((v) => `<option value="${esc(v.name)}" ${sel && v.name === sel.name ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    el.innerHTML = `<div class="row small">
+      <label>👩 קול נשי: <select id="vf" class="search" style="width:auto;margin:0;direction:ltr">${opt(femaleVoice)}</select></label>
+      <button class="say" id="tf" title="השמעה">🔊</button>
+      <label>👨 קול גברי: <select id="vm" class="search" style="width:auto;margin:0;direction:ltr">${opt(maleVoice)}</select></label>
+      <button class="say" id="tm" title="השמעה">🔊</button></div>
+      <p class="small muted">נמצאו ${vs.length} קולות ספרדיים במכשיר. אם יש רק קול אחד, הקולות יובדלו בגובה הצליל.</p>`;
+    const saveSel = () => {
+      try { localStorage.setItem('vamos_voices', JSON.stringify({ f: document.getElementById('vf').value, m: document.getElementById('vm').value })); } catch (e) {}
+      pickVoice();
+    };
+    document.getElementById('vf').onchange = saveSel; document.getElementById('vm').onchange = saveSel;
+    document.getElementById('tf').onclick = (e) => { e.stopPropagation(); speak('¡Hola! Me llamo Ana.', false, null, 'f'); };
+    document.getElementById('tm').onclick = (e) => { e.stopPropagation(); speak('¡Hola! Me llamo Carlos.', false, null, 'm'); };
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
   function utter(text, slow, gender) {
@@ -280,7 +302,8 @@
             <button class="say" data-say="${esc(d.es)}" data-g="${SPEAKER_GENDER[d.who] || ''}">🔊</button>
             <span><span class="who">${SPEAKER_GENDER[d.who] === 'm' ? '👨' : SPEAKER_GENDER[d.who] === 'f' ? '👩' : ''} ${esc(d.who)}</span>${es(d.es)}<span class="tr small">${esc(d.he)}</span></span>
           </div>`).join('')}</div>
-        <div class="row" style="margin-top:14px"><button class="btn ghost" id="playAll">▶️ השמעת כל השיחה</button></div></div>${nav('לתרגול')}`;
+        <div class="row" style="margin-top:14px"><button class="btn ghost" id="playAll">▶️ השמעת כל השיחה</button></div>
+        <details style="margin-top:14px"><summary class="small">⚙️ בחירת קולות (אם שני הדוברים נשמעים אותו דבר)</summary><div id="vpick" style="margin-top:10px"></div></details></div>${nav('לתרגול')}`;
     } else if (s.k === 'practice') {
       body = `<div class="card"><h2>🧩 משחק התאמה</h2><p class="muted">לחצו על מילה בספרדית ואז על התרגום שלה. כשמסיימים – ממשיכים לבוחן!</p><div id="match"></div></div>
         <div class="navrow"><a class="btn ghost" href="#/lesson/${id}/${stepIdx - 1}">→ הקודם</a><a class="btn" id="toQuiz" href="#/lesson/${id}/4">לבוחן ←</a></div>`;
@@ -292,6 +315,8 @@
 
     if (s.k === 'dialogue') {
       document.getElementById('hideTr').onchange = (e) => document.querySelectorAll('.tr').forEach((x) => { x.style.visibility = e.target.checked ? 'hidden' : ''; });
+      voicePicker(document.getElementById('vpick'));
+      if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', () => { const vp = document.getElementById('vpick'); if (vp) voicePicker(vp); });
       document.getElementById('playAll').onclick = () => {
         if (!('speechSynthesis' in window)) return toast('הדפדפן הזה לא תומך בהשמעת קול');
         speechSynthesis.cancel();
