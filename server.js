@@ -326,6 +326,16 @@ async function api(req, res, url) {
       const c = wbContent(url.searchParams.get('m') || 1);
       return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
     }
+    if (route === '/api/wb/health' && method === 'POST') {
+      if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
+      w.health = w.health || {};
+      const act = String(body.act || '').trim().slice(0, 300);
+      const min = Math.max(0, Math.min(600, Math.round(Number(body.min) || 0)));
+      const sleep = Math.max(0, Math.min(16, Math.round((Number(body.sleep) || 0) * 2) / 2));
+      if (!act && !min && !sleep) delete w.health[body.date]; else w.health[body.date] = { act, min, sleep, at: new Date().toISOString() };
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
     if (route === '/api/wb/kindlog' && method === 'POST') {
       if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
       w.kindlog = w.kindlog || {};

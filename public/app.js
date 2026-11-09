@@ -646,7 +646,7 @@
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.health ? ` · יומן תנועה ושינה ${Object.keys(w.health).length} ימים` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
   }
 
   async function viewParent() {
@@ -765,6 +765,7 @@
       s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
     }
+    if (CUR === 4) s.push({ key: 'health', href: '#/wb/4/health', title: 'היומן שלי: תנועה ושינה', icon: '🏃', done: Object.keys(WB().health || {}).length > 0 });
     if (CUR === 3) s.push({ key: 'kindlog', href: '#/wb/3/kindlog', title: 'היומן שלי: טוב לב וקשר חברתי', icon: '🤝', done: Object.keys(WB().kindlog || {}).length > 0 });
     if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
     if (WBC.quiz) s.push({ key: 'quiz', href: `#/wb/${CUR}/quiz`, title: `בוחן מודול ${CUR}`, icon: '📝', done: !!((WB().quiz || {})[CUR] || []).length });
@@ -789,6 +790,7 @@
     if (sub === 'via') return wbVia();
     if (sub === 'journal') return wbJournal();
     if (sub === 'kindlog') return wbKindlog();
+    if (sub === 'health') return wbHealth();
     if (sub === 'review') return wbReview();
     if (sub === 'quiz') return wbQuiz();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
@@ -814,6 +816,7 @@
     const s = WBC.sections[i]; if (!s) return go('#/wb/' + CUR);
     let html = s.html.replace('@@FIG@@', WB_FIG);
     if (/^משימת/.test(s.title) && CUR === 1) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/1/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/1/via">💪 לבחור חוזקות</a></div>`;
+    if (/^משימת/.test(s.title) && CUR === 4) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/4/health">🏃 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
     $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
@@ -916,6 +919,35 @@
       <div class="row">${next ? `<a class="btn big" href="${next.st.href}">${next.st.icon} ${n ? 'להמשיך' : 'להתחיל'}: מודול ${next.x.m.module} – ${next.st.title}</a>` : '<span class="pill ok">🎉 סיימתם את כל המודולים שכאן!</span>'}</div></div>
       ${mods.map(({ m, steps }) => { const d = steps.filter((x) => x.done).length; return `<div class="card"><div class="row between"><h2 style="margin:0"><a href="#/wb/${m.module}" style="color:inherit;text-decoration:none">${esc(m.title)}</a></h2><span class="pill ${d === steps.length ? 'ok' : ''}">${d}/${steps.length}</span></div>
         <div class="wbsteps" style="margin-top:12px">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b></span></a>`).join('')}</div></div>`; }).join('')}`;
+  }
+  function wbHealth() {
+    const J = WB().health || {}; const t = today();
+    let date = sessionStorage.getItem('wb_hdate') || t; if (date > t) date = t;
+    const e = J[date] || { act: '', min: '', sleep: '' };
+    const days = Object.keys(J).sort().reverse();
+    const moveDays = days.filter((d) => J[d].min >= 30).length, sleepNights = days.filter((d) => J[d].sleep >= 9).length;
+    const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const dots = (n, of) => `<span class="big7">${Array.from({ length: of }, (_, i) => `<span class="dot ${i < n ? 'on' : ''}"></span>`).join('')}</span>`;
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+      <div class="card"><h1>🏃 היומן שלי: תנועה ושינה</h1>
+      <p class="muted">כל יום רושמים כמה דקות זזתם וכמה שעות ישנתם בלילה. המטרה: 30 דקות תנועה ב-7 ימים, ולפחות 4 לילות של שינה מלאה (לילדים – לפחות 9 שעות).</p>
+      <div class="row">🏃 ${dots(moveDays, 7)}<span class="small muted">${moveDays}/7 ימים עם 30 דקות</span></div>
+      <div class="row" style="margin-top:6px">😴 ${dots(sleepNights, 4)}<span class="small muted">${sleepNights}/4 לילות של 9 שעות ומעלה</span></div></div>
+      <div class="card"><div class="row between"><button class="btn ghost" id="hprev">→ יום קודם</button><h2 style="margin:0">${date === t ? 'היום' : fmtDate(date)}</h2><button class="btn ghost" id="hnext" ${date >= t ? 'disabled' : ''}>יום הבא ←</button></div>
+        <h3 style="margin-top:16px">🏃 מה עשיתי?</h3>
+        <input id="hact" class="search" style="width:100%" placeholder="למשל: רקדתי בחדר, הליכה עם אמא" value="${esc(e.act)}">
+        <div class="row" style="margin-top:10px">
+          <label>⏱️ דקות תנועה: <input id="hmin" class="search" type="number" min="0" max="600" style="width:100px;margin:0" value="${esc(e.min || '')}"></label>
+          <label>😴 שעות שינה בלילה: <input id="hsleep" class="search" type="number" min="0" max="16" step="0.5" style="width:100px;margin:0" value="${esc(e.sleep || '')}"></label></div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="hsave">💾 שמירה</button></div></div>
+      ${days.length ? `<div class="card"><h2>📅 מה רשמתי</h2><table class="tbl"><tr><th>תאריך</th><th>תנועה</th><th>דקות</th><th>שינה</th></tr>${days.map((d) => `<tr><td>${fmtDate(d)}</td><td>${esc(J[d].act || '')}</td><td>${J[d].min || '–'}${J[d].min >= 30 ? ' ✅' : ''}</td><td>${J[d].sleep || '–'}${J[d].sleep >= 9 ? ' ✅' : ''}</td></tr>`).join('')}</table></div>` : ''}
+      ${wbNav('health')}`;
+    document.getElementById('hprev').onclick = () => { sessionStorage.setItem('wb_hdate', shift(date, -1)); wbHealth(); };
+    document.getElementById('hnext').onclick = () => { sessionStorage.setItem('wb_hdate', shift(date, 1)); wbHealth(); };
+    document.getElementById('hsave').onclick = async () => {
+      try { user = (await api('wb/health', { date, act: document.getElementById('hact').value, min: document.getElementById('hmin').value, sleep: document.getElementById('hsleep').value })).user; toast('✅ נשמר ביומן'); wbHealth(); }
+      catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
   }
   function wbKindlog() {
     const J = WB().kindlog || {}; const t = today();
