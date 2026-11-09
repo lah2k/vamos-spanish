@@ -626,7 +626,7 @@
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
   }
 
   async function viewParent() {
@@ -737,6 +737,7 @@
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
     }
     if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
+    if (WBC.quiz) s.push({ key: 'quiz', href: `#/wb/${CUR}/quiz`, title: `בוחן מודול ${CUR}`, icon: '📝', done: !!((WB().quiz || {})[CUR] || []).length });
     s.push({ key: 'review', href: `#/wb/${CUR}/review`, title: WBC.review.title, sid: CUR === 1 ? 'review' : `m${CUR}:review`, icon: '❓' });
     s.forEach((x) => { if (x.done == null) x.done = !!WB().read[x.sid]; });
     return s;
@@ -758,6 +759,7 @@
     if (sub === 'via') return wbVia();
     if (sub === 'journal') return wbJournal();
     if (sub === 'review') return wbReview();
+    if (sub === 'quiz') return wbQuiz();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
     const next = steps.find((x) => !x.done);
     const last = WB().perma.slice(-1)[0];
@@ -879,6 +881,49 @@
     $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">😊 המדע של האושר</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
       <p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${WBMODS.map(card).join('')}</div>`;
+  }
+  function wbQuiz() {
+    const Q = WBC.quiz || []; let i = 0, score = 0; const wrong = []; const hist = (WB().quiz || {})[CUR] || [];
+    const head = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>`;
+    const show = () => {
+      if (i >= Q.length) return finish();
+      const q = Q[i]; const order = q.o.map((_, k) => k);
+      $app.innerHTML = `${head}<div class="card"><div class="row between"><h2 style="margin:0">📝 בוחן מודול ${CUR}</h2><span class="pill">שאלה ${i + 1} מתוך ${Q.length}</span></div>
+        <div class="bar" style="margin:12px 0"><i style="width:${i / Q.length * 100}%"></i></div>
+        <p style="font-size:1.1rem;font-weight:500">${esc(q.q)}</p>${q.fig || ''}
+        ${q.multi ? '<p class="small muted">✔️ אפשר לבחור יותר מתשובה אחת, ואז ללחוץ "בדיקה"</p>' : ''}
+        <div class="opts">${order.map((k) => `<button class="opt" data-k="${k}">${q.multi ? '<span class="box">☐</span> ' : ''}${esc(q.o[k])}</button>`).join('')}</div>
+        ${q.multi ? '<div class="row" style="margin-top:10px"><button class="btn" id="qcheck" disabled>בדיקה</button></div>' : ''}
+        <div id="fb"></div></div>`;
+      const btns = [...$app.querySelectorAll('.opt')]; const picked = new Set();
+      const check = () => {
+        const ok = q.c.length === picked.size && q.c.every((k) => picked.has(k));
+        btns.forEach((b) => { const k = Number(b.dataset.k); b.disabled = true; b.classList.remove('sel'); if (q.c.includes(k)) b.classList.add('right'); else if (picked.has(k)) b.classList.add('wrong'); });
+        if (ok) score++; else wrong.push(i + 1);
+        const c = document.getElementById('qcheck'); if (c) c.remove();
+        document.getElementById('fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><b>${ok ? '✅ נכון!' : '❌ לא בדיוק.'}</b> ${esc(q.x)}</div>
+          <div class="row" style="margin-top:12px"><button class="btn" id="qnext">${i + 1 < Q.length ? 'לשאלה הבאה ←' : 'לתוצאה ←'}</button></div>`;
+        document.getElementById('qnext').onclick = () => { i++; show(); };
+      };
+      btns.forEach((b) => b.onclick = () => {
+        const k = Number(b.dataset.k);
+        if (!q.multi) { picked.add(k); return check(); }
+        if (picked.has(k)) picked.delete(k); else picked.add(k);
+        b.classList.toggle('sel', picked.has(k)); b.querySelector('.box').textContent = picked.has(k) ? '☑' : '☐';
+        document.getElementById('qcheck').disabled = !picked.size;
+      });
+      const c = document.getElementById('qcheck'); if (c) c.onclick = check;
+    };
+    const finish = async () => {
+      try { user = (await api('wb/quiz', { m: CUR, score, total: Q.length, wrong, date: today() })).user; } catch (e) {}
+      const pct = Math.round(score / Q.length * 100);
+      $app.innerHTML = `${head}<div class="card center"><div style="font-size:3rem">${pct === 100 ? '🏆' : pct >= 60 ? '🌟' : '💪'}</div>
+        <h1>${score} מתוך ${Q.length}</h1><p>${pct === 100 ? 'מושלם!' : pct >= 60 ? 'עבודה טובה!' : 'שווה לחזור על החומר ולנסות שוב.'}</p>
+        <div class="row" style="justify-content:center"><button class="btn ghost" id="again">🔁 שוב</button>${wbNav('quiz').replace(/<div class="row between noprint" style="margin-top:16px">|<\/div>$/g, '')}</div></div>
+        ${hist.length ? `<div class="card"><h2>🗓️ ניסיונות קודמים</h2><table class="tbl">${hist.slice().reverse().map((h) => `<tr><td>${fmtDate(h.date || h.at)}</td><td><b>${h.score}/${h.total}</b></td></tr>`).join('')}</table></div>` : ''}`;
+      document.getElementById('again').onclick = () => wbQuiz();
+    };
+    show();
   }
   function wbJournal() {
     const J = WB().journal || {}; const t = today();

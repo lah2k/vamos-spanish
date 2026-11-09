@@ -294,6 +294,13 @@ async function api(req, res, url) {
       const c = wbContent(url.searchParams.get('m') || 1);
       return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
     }
+    if (route === '/api/wb/quiz' && method === 'POST') {
+      const m = String(Number(body.m) || 0), score = Number(body.score), total = Number(body.total);
+      if (!wbContent(m) || !(total > 0 && score >= 0 && score <= total)) return send(res, 400, { error: 'bad quiz' });
+      w.quiz = w.quiz || {}; (w.quiz[m] = w.quiz[m] || []).push({ at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null, score, total, wrong: (Array.isArray(body.wrong) ? body.wrong : []).map(Number).slice(0, 50) });
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
     if (route === '/api/wb/journal' && method === 'POST') {
       if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
       w.journal = w.journal || {};
