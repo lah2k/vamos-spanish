@@ -253,7 +253,7 @@
     const w = WB(); const n = Object.keys(w.read).length + (w.perma.length ? 1 : 0) + (w.strengths.length ? 1 : 0);
     return `<a class="card lcard" href="#/wb" style="padding:24px;flex-wrap:wrap">
       <span class="em" style="font-size:2.6rem;width:72px;height:72px">😊</span>
-      <span style="flex:1 1 180px"><h2 style="margin:0">המדע של האושר <span class="muted small">מודול 1</span></h2>
+      <span style="flex:1 1 180px"><h2 style="margin:0">המדע של האושר</h2>
       <span class="small muted">לפי הקורס של פרופ׳ לורי סנטוס · סרטונים, קריאה ושאלונים</span>
       <span class="small" style="display:block;margin-top:8px">${n ? `התחלתם · ${n} חלקים הושלמו` : 'עוד לא התחלתם'}</span></span>
       <span class="btn alt" style="flex:1 1 100%">${n ? 'להמשיך' : 'להתחיל'} ←</span></a>`;
@@ -626,7 +626,7 @@
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}</p>`;
   }
 
   async function viewParent() {
@@ -699,7 +699,7 @@
 
   // ---------- המדע של האושר (Well-Being, private course) ----------
   const WBINFO = { code: 'he', flag: '😊', brand: 'המדע של האושר', name: 'המדע של האושר' };
-  let WBC = null;
+  let WBC = null, CUR = 1, WBMODS = null; const WBM = {};
   const WB = () => (user && user.wb) || { read: {}, perma: [], strengths: [], strengthDays: [] };
   const PERMA_DIMS = [
     ['P', 'רגשות חיוביים', 'שמחה, סיפוק ותחושה טובה ביום-יום', false],
@@ -724,69 +724,82 @@
     </g>
     <text x="490" y="215" text-anchor="middle" font-size="15" fill="#667085">גם שני השולחנות זהים (בערך כמו אצל שפרד)</text>
   </svg><figcaption class="small muted">אשליית מילר-לייר והשולחנות של שפרד</figcaption></figure>`;
-  async function wbLoad() {
-    if (WBC) return WBC;
-    WBC = (await api('wb/content')).content;
+  async function wbLoad(m) {
+    CUR = m;
+    if (!WBM[m]) WBM[m] = (await api('wb/content?m=' + m)).content;
+    WBC = WBM[m];
     return WBC;
   }
   function wbSteps() {
-    const s = WBC.sections.map((x, i) => ({ key: 's' + i, href: '#/wb/s/' + i, title: x.title, sid: x.id, icon: /^סרטון/.test(x.title) ? '🎬' : /^קריאה/.test(x.title) ? '📖' : /^משימת/.test(x.title) ? '✅' : 'ℹ️' }));
-    s.push({ key: 'perma', href: '#/wb/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
-    s.push({ key: 'via', href: '#/wb/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
-    s.push({ key: 'review', href: '#/wb/review', title: WBC.review.title, sid: 'review', icon: '❓' });
+    const s = WBC.sections.map((x, i) => ({ key: 's' + i, href: `#/wb/${CUR}/s/` + i, title: x.title, sid: x.id, icon: /^סרטון/.test(x.title) ? '🎬' : /^קריאה/.test(x.title) ? '📖' : /^משימת/.test(x.title) ? '✅' : 'ℹ️' }));
+    if (CUR === 1) {
+      s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
+      s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
+    }
+    if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
+    s.push({ key: 'review', href: `#/wb/${CUR}/review`, title: WBC.review.title, sid: CUR === 1 ? 'review' : `m${CUR}:review`, icon: '❓' });
     s.forEach((x) => { if (x.done == null) x.done = !!WB().read[x.sid]; });
     return s;
   }
   const wbMark = async (sid) => { if (!WB().read[sid]) { try { user = (await api('wb/read', { sid, date: today() })).user; } catch (e) {} } };
   async function viewWb(parts) {
+    parts = parts.slice();
     if (!user.wbAccess) { toast('הקורס הזה פתוח רק לחשבונות שאושרו באזור ההורים'); return go('#/courses'); }
-    try { await wbLoad(); } catch (e) { $app.innerHTML = '<div class="card">😕 לא הצלחנו לטעון את התוכן כרגע. נסו שוב בעוד רגע.</div>'; return; }
+    if (parts[1] && !/^\d+$/.test(parts[1])) parts.splice(1, 0, '1'); // old links: #/wb/perma -> #/wb/1/perma
+    try {
+      if (!WBMODS) WBMODS = (await api('wb/modules')).modules;
+      if (!parts[1]) return wbOverview();
+      await wbLoad(Number(parts[1]));
+    } catch (e) { $app.innerHTML = '<div class="card">😕 לא הצלחנו לטעון את התוכן כרגע. נסו שוב בעוד רגע.</div>'; return; }
+    parts = parts.slice(1);
     const sub = parts[1];
     if (sub === 's') return wbSection(Number(parts[2]));
     if (sub === 'perma') return wbPerma(parts[2]);
     if (sub === 'via') return wbVia();
+    if (sub === 'journal') return wbJournal();
     if (sub === 'review') return wbReview();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
     const next = steps.find((x) => !x.done);
     const last = WB().perma.slice(-1)[0];
     $app.innerHTML = `<div class="card hello">
-        <div class="row between"><h1 style="margin:0">😊 המדע של האושר</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
-        <p style="margin:6px 0 0">${esc(WBC.moduleTitle)} · לפי הקורס של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
+        <div class="row between"><h1 style="margin:0">😊 ${esc(WBC.moduleTitle)}</h1><a class="pill" href="#/wb" style="text-decoration:none">📚 כל המודולים</a></div>
+        <p style="margin:6px 0 0">המדע של האושר · לפי הקורס של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
         <div style="margin-top:14px" class="bar"><i style="width:${n / steps.length * 100}%"></i></div>
         <p class="small muted">${n} מתוך ${steps.length} חלקים הושלמו</p>
-        <div class="row">${next ? `<a class="btn big" href="${next.href}">${next.icon} ${n ? 'להמשיך' : 'להתחיל'}: ${next.title}</a>` : '<span class="pill ok">🎉 סיימתם את מודול 1!</span>'}
-        ${last ? `<a class="btn alt" href="#/wb/perma/results">📊 התוצאות שלי</a>` : ''}</div>
+        <div class="row">${next ? `<a class="btn big" href="${next.href}">${next.icon} ${n ? 'להמשיך' : 'להתחיל'}: ${next.title}</a>` : `<span class="pill ok">🎉 סיימתם את מודול ${CUR}!</span>${WBMODS.some((m) => m.module === CUR + 1) ? ` <a class="btn" href="#/wb/${CUR + 1}">למודול ${CUR + 1} ←</a>` : ''}`}
+        ${last && CUR === 1 ? `<a class="btn alt" href="#/wb/1/perma/results">📊 התוצאות שלי</a>` : ''}</div>
       </div>
       <div class="card"><h2>📋 חלקי המודול</h2><div class="wbsteps">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b></span></a>`).join('')}</div></div>`;
   }
   function wbNav(i) {
     const steps = wbSteps(); const j = steps.findIndex((x) => x.key === i);
     const prev = steps[j - 1], next = steps[j + 1];
-    return `<div class="row between noprint" style="margin-top:16px">${prev ? `<a class="btn ghost" href="${prev.href}">→ ${prev.title}</a>` : '<a class="btn ghost" href="#/wb">→ לתוכן המודול</a>'}
-      ${next ? `<a class="btn" data-next href="${next.href}">${next.title} ←</a>` : '<a class="btn" data-next href="#/wb">סיום ←</a>'}</div>`;
+    return `<div class="row between noprint" style="margin-top:16px">${prev ? `<a class="btn ghost" href="${prev.href}">→ ${prev.title}</a>` : `<a class="btn ghost" href="#/wb/${CUR}">→ לתוכן המודול</a>`}
+      ${next ? `<a class="btn" data-next href="${next.href}">${next.title} ←</a>` : `<a class="btn" data-next href="#/wb/${CUR}">סיום ←</a>`}</div>`;
   }
   function wbSection(i) {
-    const s = WBC.sections[i]; if (!s) return go('#/wb');
+    const s = WBC.sections[i]; if (!s) return go('#/wb/' + CUR);
     let html = s.html.replace('@@FIG@@', WB_FIG);
-    if (/^משימת/.test(s.title)) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/via">💪 לבחור חוזקות</a></div>`;
-    $app.innerHTML = `<p class="small"><a href="#/wb">😊 המדע של האושר</a> · חלק ${i + 1}</p>
+    if (/^משימת/.test(s.title) && CUR === 1) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/1/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/1/via">💪 לבחור חוזקות</a></div>`;
+    if (/^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
       <article class="card wbtext"><h1>${s.title}</h1>${html}</article>${wbNav('s' + i)}`;
     $app.querySelector('[data-next]').addEventListener('click', () => wbMark(s.id));
     window.scrollTo(0, 0);
   }
   function wbReview() {
     const r = WBC.review;
-    $app.innerHTML = `<p class="small"><a href="#/wb">😊 המדע של האושר</a></p><div class="card wbtext"><h1>${r.title}</h1>${r.intro}
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${r.title}</h1>${r.intro}
       ${r.items.map((q, i) => `<details class="wbq"><summary><b>${i + 1}.</b> ${q.q}</summary><div class="ans">${q.a.replace(/<\/?li>/g, '')}</div></details>`).join('')}</div>${wbNav('review')}`;
-    $app.querySelector('[data-next]').addEventListener('click', () => wbMark('review'));
+    $app.querySelector('[data-next]').addEventListener('click', () => wbMark(CUR === 1 ? 'review' : `m${CUR}:review`));
   }
   function wbPerma(sub) {
     const P = WBC.perma; const hist = WB().perma;
     if (sub === 'results') return wbPermaResults();
     const phase = hist.some((h) => h.phase === 'pre') ? 'post' : 'pre';
     const ans = {};
-    $app.innerHTML = `<p class="small"><a href="#/wb">😊 המדע של האושר</a></p><div class="card wbtext"><h1>${P.title}</h1>${P.intro}
-      <p class="small">💾 כאן באתר לא צריך לרשום כלום – התשובות והציונים נשמרים בחשבון שלכם${hist.length ? ` (כבר מילאתם ${hist.length} פעמים · <a href="#/wb/perma/results">לתוצאות</a>)` : ''}.</p>
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${P.title}</h1>${P.intro}
+      <p class="small">💾 כאן באתר לא צריך לרשום כלום – התשובות והציונים נשמרים בחשבון שלכם${hist.length ? ` (כבר מילאתם ${hist.length} פעמים · <a href="#/wb/1/perma/results">לתוצאות</a>)` : ''}.</p>
       <div class="row small"><label><input type="radio" name="ph" value="pre" ${phase === 'pre' ? 'checked' : ''}> מדידת פתיחה</label><label><input type="radio" name="ph" value="post" ${phase === 'post' ? 'checked' : ''}> מדידת סיום (להשוואה)</label></div></div>
       ${P.items.map((it) => `<div class="card pq" data-n="${it.n}"><p><b>${it.n}.</b> ${it.q}</p>
         <div class="scale">${Array.from({ length: 11 }, (_, v) => `<button type="button" data-v="${v}">${v}</button>`).join('')}</div>
@@ -800,13 +813,13 @@
     }));
     document.getElementById('psend').onclick = async () => {
       const ph = ($app.querySelector('[name=ph]:checked') || {}).value || phase;
-      try { user = (await api('wb/perma', { answers: ans, phase: ph, date: today() })).user; go('#/wb/perma/results'); }
+      try { user = (await api('wb/perma', { answers: ans, phase: ph, date: today() })).user; go('#/wb/1/perma/results'); }
       catch (e) { toast('לא הצלחנו לשמור, נסו שוב'); }
     };
   }
   function wbPermaResults() {
     const hist = WB().perma;
-    if (!hist.length) return go('#/wb/perma');
+    if (!hist.length) return go('#/wb/1/perma');
     const last = hist[hist.length - 1];
     const pre = hist.filter((h) => h.phase === 'pre')[0];
     const post = hist.filter((h) => h.phase === 'post').slice(-1)[0];
@@ -820,13 +833,13 @@
         ${cmp ? `<span class="pill ${good}"><bdi dir="ltr">${d > 0 ? '+' : ''}${d}</bdi></span>` : ''}</div>`;
     };
     const top = PERMA_DIMS.slice(0, 5).map((x) => [x[1], last.scores[x[0]]]).sort((a, b) => b[1] - a[1]);
-    $app.innerHTML = `<p class="small"><a href="#/wb">😊 המדע של האושר</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>📊 התוצאות שלי – PERMA</h1>
       <p class="muted">${last.phase === 'pre' ? 'מדידת פתיחה' : 'מדידת סיום'} · ${fmtDate(last.date || last.at)} · כל ציון הוא ממוצע מ-0 עד 10.</p>
       ${PERMA_DIMS.map(row).join('')}
       <p class="small">⭐ התחום החזק ביותר שלך כרגע: <b>${top[0][0]}</b> (${top[0][1].toFixed(1)}). התחום שהכי כדאי לטפח: <b>${top[4][0]}</b> (${top[4][1].toFixed(1)}).</p>
       <p class="small muted">${cmp ? `ההשוואה היא בין מדידת הפתיחה (${fmtDate(pre.date || pre.at)}) למדידת הסיום (${fmtDate(post.date || post.at)}).` : 'בסוף הקורס ממלאים שוב, ואז יופיע כאן כמה כל תחום השתנה.'} זה לא מבחן ואין "ציון עובר" – משווים רק לעצמנו. שאלון PERMA-Profiler נבנה למבוגרים (Butler &amp; Kern, 2016); זה תרגום לא רשמי.</p>
-      <div class="row"><a class="btn" href="#/wb/via">💪 להמשיך לחוזקות</a><a class="btn ghost" href="#/wb/perma">🔁 למלא שוב</a></div></div>
+      <div class="row"><a class="btn" href="#/wb/1/via">💪 להמשיך לחוזקות</a><a class="btn ghost" href="#/wb/1/perma">🔁 למלא שוב</a></div></div>
       ${hist.length > 1 ? `<div class="card"><h2>🗓️ כל המילויים</h2><table class="tbl"><tr><th>תאריך</th><th>סוג</th><th>רווחה כללית</th><th>P</th><th>E</th><th>R</th><th>M</th><th>A</th></tr>${hist.map((h) => `<tr><td>${fmtDate(h.date || h.at)}</td><td>${h.phase === 'pre' ? 'פתיחה' : 'סיום'}</td><td><b>${h.scores.overall.toFixed(1)}</b></td>${['P', 'E', 'R', 'M', 'A'].map((k) => `<td>${h.scores[k].toFixed(1)}</td>`).join('')}</tr>`).join('')}</table></div>` : ''}`;
   }
   function wbVia() {
@@ -834,7 +847,7 @@
     const areas = [...new Set(V.strengths.map((s) => s.area))];
     const render = () => {
       const days = WB().strengthDays || []; const t = today();
-      $app.innerHTML = `<p class="small"><a href="#/wb">😊 המדע של האושר</a></p><div class="card wbtext"><h1>${V.title}</h1>${V.intro}</div>
+      $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${V.title}</h1>${V.intro}</div>
         <div class="card"><h2>💪 החוזקות שלי <span class="small muted">(${top.length}/5 – לחצו לבחירה, לפי הסדר)</span></h2>
         <div class="row">${top.length ? top.map((n, i) => `<span class="pill purple">${i + 1}. ${esc(n)}</span>`).join('') : '<span class="muted small">עוד לא בחרתם</span>'}</div>
         ${areas.map((a) => `<h3 style="margin-top:14px">${esc(a)}</h3><div class="via">${V.strengths.filter((s) => s.area === a).map((s) => `<button type="button" class="vchip ${top.includes(s.name) ? 'on' : ''}" data-s="${esc(s.name)}"><b>${esc(s.name)}</b><span>${esc(s.desc)}</span>${top.includes(s.name) ? `<i>${top.indexOf(s.name) + 1}</i>` : ''}</button>`).join('')}</div>`).join('')}
@@ -853,6 +866,46 @@
       const d = document.getElementById('vday'); if (d) d.onclick = async () => { user = (await api('wb/strength-day', { date: t })).user; render(); };
     };
     render();
+  }
+
+  function wbOverview() {
+    const r = WB().read;
+    const card = (m) => {
+      const done = m.sections.filter((id) => r[id]).length;
+      return `<a class="card lcard" href="#/wb/${m.module}" style="padding:18px"><span class="em">${m.module}</span>
+        <span style="flex:1"><h2 style="margin:0">${esc(m.title)}</h2><div class="bar" style="margin-top:8px"><i style="width:${done / m.sections.length * 100}%"></i></div>
+        <span class="small muted">${done ? `${done} מתוך ${m.sections.length} חלקים נקראו` : 'עוד לא התחלתם'}</span></span></a>`;
+    };
+    $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">😊 המדע של האושר</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
+      <p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${WBMODS.map(card).join('')}</div>`;
+  }
+  function wbJournal() {
+    const J = WB().journal || {}; const t = today();
+    let date = sessionStorage.getItem('wb_jdate') || t; if (date > t) date = t;
+    const e = J[date] || { savor: '', grat: [] };
+    const days = Object.keys(J).sort().reverse();
+    const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+      <div class="card"><h1>📔 היומן שלי: הנאה מודעת ותודה</h1>
+      <p class="muted">7 ימים: כל ערב רושמים על מה התענגתם היום, וחמישה דברים שאתם מוקירים תודה עליהם. הכול נשמר בחשבון שלכם.</p>
+      <div class="row"><span class="big7">${Array.from({ length: 7 }, (_, i) => `<span class="dot ${i < days.length ? 'on' : ''}"></span>`).join('')}</span><span class="small muted">${days.length}/7 ימים</span></div></div>
+      <div class="card"><div class="row between"><button class="btn ghost" id="jprev">→ יום קודם</button><h2 style="margin:0">${date === t ? 'היום' : fmtDate(date)}</h2><button class="btn ghost" id="jnext" ${date >= t ? 'disabled' : ''}>יום הבא ←</button></div>
+        <h3 style="margin-top:16px">🌸 על מה התענגתי היום?</h3>
+        <textarea id="jsav" class="search" rows="3" style="width:100%;resize:vertical" placeholder="למשל: ארוחת ערב עם המשפחה – צילמתי תמונה וסיפרתי לאבא כמה היה טעים">${esc(e.savor)}</textarea>
+        <h3>🙏 חמישה דברים שאני מוקיר/ה תודה עליהם</h3>
+        ${[0, 1, 2, 3, 4].map((i) => `<input class="search jg" style="width:100%;margin:4px 0" placeholder="${i + 1}." value="${esc(e.grat[i] || '')}">`).join('')}
+        <div class="row" style="margin-top:12px"><button class="btn" id="jsave">💾 שמירה</button></div></div>
+      ${days.length ? `<div class="card"><h2>📅 מה כתבתי</h2>${days.map((d) => `<details class="wbq"><summary><b>${fmtDate(d)}</b> ${J[d].savor ? '· 🌸 ' + esc(J[d].savor.slice(0, 50)) : ''}</summary><div class="ans">${J[d].savor ? `<p>🌸 ${esc(J[d].savor)}</p>` : ''}${J[d].grat.filter(Boolean).length ? `<ol>${J[d].grat.filter(Boolean).map((g) => `<li>${esc(g)}</li>`).join('')}</ol>` : ''}</div></details>`).join('')}</div>` : ''}
+      ${wbNav('journal')}`;
+    document.getElementById('jprev').onclick = () => { sessionStorage.setItem('wb_jdate', shift(date, -1)); wbJournal(); };
+    document.getElementById('jnext').onclick = () => { sessionStorage.setItem('wb_jdate', shift(date, 1)); wbJournal(); };
+    document.getElementById('jsave').onclick = async () => {
+      try {
+        user = (await api('wb/journal', { date, savor: document.getElementById('jsav').value, grat: [...$app.querySelectorAll('.jg')].map((x) => x.value) })).user;
+        toast('✅ נשמר ביומן'); wbJournal();
+      } catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
   }
 
   // ---------- router ----------

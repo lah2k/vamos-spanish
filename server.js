@@ -39,20 +39,22 @@ function allFinished(u) {
 
 // ---------- Well-Being course (private, parent-approved accounts only) ----------
 // The Hebrew translation is kept encrypted in the repo; the key lives only in the server DB (db.settings.wbKey).
-const WB_FILE = path.join(__dirname, 'content-private', 'wb1.enc');
-let wbCache = null;
-function wbContent() {
-  if (wbCache) return wbCache;
+const wbCache = {};
+function wbContent(m) {
+  m = String(Number(m) || 1);
+  if (wbCache[m]) return wbCache[m];
   const key = db.settings && db.settings.wbKey;
-  if (!key) return null;
+  const file = path.join(__dirname, 'content-private', `wb${m}.enc`);
+  if (!key || !fs.existsSync(file)) return null;
   try {
-    const raw = Buffer.from(fs.readFileSync(WB_FILE, 'utf8'), 'base64');
+    const raw = Buffer.from(fs.readFileSync(file, 'utf8'), 'base64');
     const d = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), raw.subarray(0, 12));
     d.setAuthTag(raw.subarray(12, 28));
-    wbCache = JSON.parse(Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8'));
-    return wbCache;
+    wbCache[m] = JSON.parse(Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8'));
+    return wbCache[m];
   } catch (e) { console.error('wb decrypt', e.message); return null; }
 }
+const wbModules = () => fs.readdirSync(path.join(__dirname, 'content-private')).map((f) => (f.match(/^wb(\d+)\.enc$/) || [])[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
 // PERMA-Profiler (Butler & Kern, 2016) scoring, item numbers 1..23
 const PERMA_SCALES = {
   P: [3, 13, 22], E: [2, 10, 17], R: [8, 19, 21], M: [7, 9, 20], A: [1, 5, 15],
@@ -206,8 +208,8 @@ async function api(req, res, url) {
   if (route === '/api/admin/wb-key' && method === 'POST') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     if (!/^[0-9a-f]{64}$/.test(String(body.key || ''))) return send(res, 400, { error: 'bad key' });
-    db.settings.wbKey = body.key; wbCache = null; save();
-    return send(res, 200, { ok: !!wbContent() });
+    db.settings.wbKey = body.key; Object.keys(wbCache).forEach((k) => delete wbCache[k]); save();
+    return send(res, 200, { ok: !!wbContent(1) });
   }
 
   if (route.startsWith('/api/admin/') && method === 'POST') {
@@ -285,9 +287,22 @@ async function api(req, res, url) {
   if (route.startsWith('/api/wb/')) {
     if (!u.wbAccess) return send(res, 403, { error: 'no access' });
     const w = wbOf(u);
+    if (route === '/api/wb/modules' && method === 'GET') {
+      return send(res, 200, { modules: wbModules().map((m) => { const c = wbContent(m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
+    }
     if (route === '/api/wb/content' && method === 'GET') {
-      const c = wbContent();
+      const c = wbContent(url.searchParams.get('m') || 1);
       return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
+    }
+    if (route === '/api/wb/journal' && method === 'POST') {
+      if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
+      w.journal = w.journal || {};
+      const savor = String(body.savor || '').trim().slice(0, 500);
+      const grat = (Array.isArray(body.grat) ? body.grat : []).map((x) => String(x || '').trim().slice(0, 200)).slice(0, 5);
+      if (!savor && !grat.some(Boolean)) delete w.journal[body.date];
+      else w.journal[body.date] = { savor, grat, at: new Date().toISOString() };
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
     }
     if (route === '/api/wb/read' && method === 'POST') {
       const sid = String(body.sid || '').slice(0, 40);
