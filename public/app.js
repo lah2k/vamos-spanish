@@ -1,10 +1,31 @@
 /* ¡Vamos! front-end — Hebrew RTL single-page app */
 (function () {
   'use strict';
-  const LESSONS = (window.LESSONS || []).slice().sort((a, b) => a.id - b.id);
-  const byId = {}; LESSONS.forEach((l) => { byId[l.id] = l; });
-  const QUESTIONS = {}; // qid -> question with lessonId
-  LESSONS.forEach((l) => l.quiz.forEach((q, i) => { QUESTIONS[`${l.id}-${i + 1}`] = Object.assign({ qid: `${l.id}-${i + 1}`, lessonId: l.id }, q); }));
+  // ---------- courses ----------
+  const COURSES = {
+    es: { code: 'es', name: 'ספרדית', inLang: 'בספרדית', flag: '🇪🇸', brand: '¡Vamos!', hello: '¡Hola!', tts: 'es-ES', lessons: window.LESSONS || [],
+      cheers: ['✅ נכון! ¡Muy bien!', '✅ מצוין! ¡Perfecto!', '✅ כל הכבוד! ¡Genial!', '✅ בדיוק! ¡Excelente!'],
+      perfect: '¡Perfecto!', veryGood: '¡Muy bien!', good: '¡Bien!', congrats: '¡Felicidades!', cert: '¡Enhorabuena!', ten: '¡Diez!', champ: 'אלופ/ת הספרדית',
+      sampleF: '¡Hola! Me llamo Ana.', sampleM: '¡Hola! Me llamo Carlos.', voicesKey: 'vamos_voices' },
+    fr: { code: 'fr', name: 'צרפתית', inLang: 'בצרפתית', flag: '🇫🇷', brand: 'Allons-y !', hello: 'Bonjour !', tts: 'fr-FR', lessons: window.LESSONS_FR || [],
+      cheers: ['✅ נכון! Très bien !', '✅ מצוין! Parfait !', '✅ כל הכבוד! Bravo !', '✅ בדיוק! Excellent !'],
+      perfect: 'Parfait !', veryGood: 'Très bien !', good: 'Bien !', congrats: 'Félicitations !', cert: 'Bravo !', ten: 'Dix !', champ: 'אלופ/ת הצרפתית',
+      sampleF: 'Bonjour ! Je m’appelle Lucie.', sampleM: 'Bonjour ! Je m’appelle Tom.', voicesKey: 'vamos_voices_fr' },
+  };
+  let COURSE = 'es', INFO = COURSES.es, LESSONS = [], byId = {}, QUESTIONS = {};
+  function setCourse(code, persist) {
+    COURSE = COURSES[code] ? code : 'es'; INFO = COURSES[COURSE];
+    if (persist !== false) { try { localStorage.setItem('vamos_course', COURSE); } catch (e) {} }
+    document.documentElement.dataset.course = COURSE;
+    LESSONS = INFO.lessons.slice().sort((a, b) => a.id - b.id);
+    byId = {}; LESSONS.forEach((l) => { byId[l.id] = l; });
+    QUESTIONS = {};
+    LESSONS.forEach((l) => l.quiz.forEach((q, i) => { QUESTIONS[`${l.id}-${i + 1}`] = Object.assign({ qid: `${l.id}-${i + 1}`, lessonId: l.id }, q); }));
+    if (typeof pickVoice === 'function') pickVoice();
+  }
+  const EMPTY = { lessons: {}, attempts: {}, mistakes: {}, fixed: 0, flashcards: 0 };
+  // Spanish progress is stored at the top level of the user; other courses under user.courses[code]
+  const CD = () => (!user ? EMPTY : COURSE === 'es' ? user : (user.courses && user.courses[COURSE]) || EMPTY);
 
   const $app = document.getElementById('app');
   let user = null;
@@ -14,14 +35,15 @@
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const fmtDate = (iso) => { if (!iso) return ''; const d = new Date(iso.length === 10 ? iso + 'T12:00:00' : iso); return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' }); };
   const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const es = (t) => `<span class="es${String(t).length > 22 ? ' long' : ''}" lang="es" dir="ltr">${esc(t)}</span>`;
+  const es = (t) => `<span class="es${String(t).length > 22 ? ' long' : ''}" lang="${INFO.code}" dir="ltr">${esc(t)}</span>`;
   // Hebrew text that may contain Spanish fragments: wrap Latin runs so punctuation renders correctly
-  const L = 'A-Za-zÁÉÍÓÚÜÑáéíóúüñ';
-  const RUN = new RegExp(`([¿¡][${L}0-9 ,'’…\\-]*[?!]|[${L}][${L}0-9 ,'’…\\-]*[${L}0-9])`, 'g');
+  const L = 'A-Za-zÁÉÍÓÚÜÑáéíóúüñàâäçèêëîïôöûùÿœæÀÂÄÇÈÊËÎÏÔÖÛÙŸŒÆ';
+  // Latin-script runs; French-style " !" / " ?" after a run stays with it
+  const RUN = new RegExp(`([¿¡][${L}0-9 ,'’…\\-]*[?!]|[${L}][${L}0-9 ,'’…\\-]*[${L}0-9](?:\u00a0?\\s[!?])?)`, 'g');
   const mixed = (t) => {
     const s = String(t == null ? '' : t);
-    if (!/[֐-׿]/.test(s)) return /[A-Za-z]/.test(s) ? `<bdi dir="ltr" lang="es">${esc(s)}</bdi>` : esc(s);
-    return s.split(RUN).map((part, i) => (i % 2 ? `<bdi dir="ltr" lang="es">${esc(part)}</bdi>` : esc(part))).join('');
+    if (!/[֐-׿]/.test(s)) return /[A-Za-z]/.test(s) ? `<bdi dir="ltr" lang="${INFO.code}">${esc(s)}</bdi>` : esc(s);
+    return s.split(RUN).map((part, i) => (i % 2 ? `<bdi dir="ltr" lang="${INFO.code}">${esc(part)}</bdi>` : esc(part))).join('');
   };
 
   function toast(msg, ms) {
@@ -33,7 +55,7 @@
   async function api(path, body) {
     const opts = { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' } };
     if (user) opts.headers['X-User-Email'] = user.email;
-    if (body) opts.body = JSON.stringify(body);
+    if (body) opts.body = JSON.stringify(Object.assign({ course: COURSE }, body));
     const r = await fetch('/api/' + path, opts);
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(data.error || 'error'), { status: r.status });
@@ -42,14 +64,15 @@
 
   // ---------- speech ----------
   // Two distinct Spanish voices: female speakers get a woman's voice, male speakers a man's voice.
-  const FEMALE_RE = /(helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|laia|lia\b|catalina|marta|nuria|carmen|renata|valentina|yolanda|google espa[nñ]ol|female|mujer)/i;
-  const MALE_RE = /(pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|\bteo\b|sergio|el[ií]as|saul|sa[uú]l|nil\b|gerardo|esteban|cristian|federico|tom[aá]s|alberto|male\b|hombre)/i;
-  const SPEAKER_GENDER = { 'שני': 'f', 'אנה': 'f', 'מאיה': 'f', 'אמא': 'f', 'מוכרת': 'f', 'רופאה': 'f', 'לאו': 'm', 'קרלוס': 'm', 'אבא': 'm', 'מלצר': 'm', 'איש': 'm', 'מורה': 'm' };
+  const FEMALE_RE = /(am[eé]lie|audrey|aur[eé]lie|marie|julie|hortense|denise|elo[iï]se|c[eé]leste|chantal|sylvie|brigitte|vivienne|coralie|jacqueline|jos[eé]phine|yvette|google fran[cç]ais|helena|laura|elvira|ximena|dalia|paulina|m[oó]nica|luc[ií]a|marisol|esperanza|sabina|elena|conchita|pen[eé]lope|lupe|camila|sof[ií]a|paloma|abril|estrella|irene|triana|vera|larissa|beatriz|isabel|laia|lia\b|catalina|marta|nuria|carmen|renata|valentina|yolanda|google espa[nñ]ol|female|mujer)/i;
+  const MALE_RE = /(thomas|henri|\bpaul\b|claude|r[eé]my|j[eé]r[oô]me|alain|antoine|nicolas|guillaume|maurice|yves|fabrice|mathieu|pablo|[aá]lvaro|jorge|diego|juan|enrique|carlos|ra[uú]l|jos[eé]|miguel|manuel|alonso|andr[eé]s|gonzalo|dar[ií]o|arnau|\bteo\b|sergio|el[ií]as|saul|sa[uú]l|nil\b|gerardo|esteban|cristian|federico|tom[aá]s|alberto|male\b|hombre)/i;
+  const SPEAKER_GENDER = { 'לוסי': 'f', 'קלואה': 'f', 'תום': 'm', 'פייר': 'm', 'שני': 'f', 'אנה': 'f', 'מאיה': 'f', 'אמא': 'f', 'מוכרת': 'f', 'רופאה': 'f', 'לאו': 'm', 'קרלוס': 'm', 'אבא': 'm', 'מלצר': 'm', 'איש': 'm', 'מורה': 'm' };
   let esVoice = null, femaleVoice = null, maleVoice = null;
   function pickVoice() {
     if (!('speechSynthesis' in window)) return;
-    const vs = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang));
-    const rank = (v) => (/^es[-_]ES/i.test(v.lang) ? 0 : /^es[-_]MX/i.test(v.lang) ? 1 : 2) + (/natural|online|google/i.test(v.name) ? -0.5 : 0);
+    const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(INFO.code));
+    const main = INFO.tts.toLowerCase().replace('-', '[-_]');
+    const rank = (v) => (new RegExp('^' + main, 'i').test(v.lang) ? 0 : /^es[-_]MX|^fr[-_]CA/i.test(v.lang) ? 1 : 2) + (/natural|online|google/i.test(v.name) ? -0.5 : 0);
     vs.sort((a, b) => rank(a) - rank(b));
     esVoice = vs[0] || null;
     femaleVoice = vs.find((v) => FEMALE_RE.test(v.name)) || null;
@@ -57,27 +80,27 @@
     // Google's plain "español" voice is female
     if (!femaleVoice) femaleVoice = vs.find((v) => /google/i.test(v.name)) || null;
     // the user's own choice (from the voice picker) wins
-    let pref = {}; try { pref = JSON.parse(localStorage.getItem('vamos_voices') || '{}'); } catch (e) {}
+    let pref = {}; try { pref = JSON.parse(localStorage.getItem(INFO.voicesKey) || '{}'); } catch (e) {}
     if (pref.f) femaleVoice = vs.find((v) => v.name === pref.f) || femaleVoice;
     if (pref.m) maleVoice = vs.find((v) => v.name === pref.m) || maleVoice;
   }
   function voicePicker(el) {
-    const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)) : [];
-    if (!vs.length) { el.innerHTML = '<p class="small muted">לא נמצאו קולות ספרדיים במכשיר הזה. אפשר להוסיף קול ספרדי בהגדרות השפה והדיבור של המכשיר.</p>'; return; }
+    const vs = ('speechSynthesis' in window) ? speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(INFO.code)) : [];
+    if (!vs.length) { el.innerHTML = `<p class="small muted">לא נמצאו קולות ${INFO.inLang} במכשיר הזה. אפשר להוסיף קול ${INFO.inLang} בהגדרות השפה והדיבור של המכשיר.</p>`; return; }
     const opt = (sel) => vs.map((v) => `<option value="${esc(v.name)}" ${sel && v.name === sel.name ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
     el.innerHTML = `<div class="row small">
       <label>👩 קול נשי: <select id="vf" class="search" style="width:auto;margin:0;direction:ltr">${opt(femaleVoice)}</select></label>
       <button class="say" id="tf" title="השמעה">🔊</button>
       <label>👨 קול גברי: <select id="vm" class="search" style="width:auto;margin:0;direction:ltr">${opt(maleVoice)}</select></label>
       <button class="say" id="tm" title="השמעה">🔊</button></div>
-      <p class="small muted">נמצאו ${vs.length} קולות ספרדיים במכשיר. אם יש רק קול אחד, הקולות יובדלו בגובה הצליל.</p>`;
+      <p class="small muted">נמצאו ${vs.length} קולות ${INFO.inLang} במכשיר. אם יש רק קול אחד, הקולות יובדלו בגובה הצליל.</p>`;
     const saveSel = () => {
-      try { localStorage.setItem('vamos_voices', JSON.stringify({ f: document.getElementById('vf').value, m: document.getElementById('vm').value })); } catch (e) {}
+      try { localStorage.setItem(INFO.voicesKey, JSON.stringify({ f: document.getElementById('vf').value, m: document.getElementById('vm').value })); } catch (e) {}
       pickVoice();
     };
     document.getElementById('vf').onchange = saveSel; document.getElementById('vm').onchange = saveSel;
-    document.getElementById('tf').onclick = (e) => { e.stopPropagation(); speak('¡Hola! Me llamo Ana.', false, null, 'f'); };
-    document.getElementById('tm').onclick = (e) => { e.stopPropagation(); speak('¡Hola! Me llamo Carlos.', false, null, 'm'); };
+    document.getElementById('tf').onclick = (e) => { e.stopPropagation(); speak(INFO.sampleF, false, null, 'f'); };
+    document.getElementById('tm').onclick = (e) => { e.stopPropagation(); speak(INFO.sampleM, false, null, 'm'); };
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
   function utter(text, slow, gender) {
@@ -87,7 +110,7 @@
     let v = esVoice, pitch = 1;
     if (gender === 'f') { v = fv; if (!distinct) pitch = 1.2; }
     if (gender === 'm') { v = mv; if (!distinct) pitch = 0.75; }
-    u.lang = v ? v.lang : 'es-ES'; if (v) u.voice = v;
+    u.lang = v ? v.lang : INFO.tts; if (v) u.voice = v;
     u.rate = slow ? 0.55 : 0.85; u.pitch = pitch;
     return u;
   }
@@ -97,7 +120,7 @@
     const u = utter(text, slow, gender);
     if (btn) { btn.classList.add('playing'); u.onend = u.onerror = () => btn.classList.remove('playing'); }
     speechSynthesis.speak(u);
-    if (!esVoice && !speak._warned) { speak._warned = true; setTimeout(() => { if (!esVoice) toast('טיפ: אם לא שומעים ספרדית טובה, אפשר להתקין קול ספרדי בהגדרות המכשיר (שפה ודיבור).', 5000); }, 800); }
+    if (!esVoice && !speak._warned) { speak._warned = true; setTimeout(() => { if (!esVoice) toast(`טיפ: אם לא שומעים טוב, אפשר להתקין קול ${INFO.inLang} בהגדרות המכשיר (שפה ודיבור).`, 5000); }, 800); }
   }
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-say]');
@@ -106,14 +129,14 @@
   const sayBtns = (t) => `<button class="say" data-say="${esc(t)}" title="השמעה" aria-label="השמעה">🔊</button><button class="say slow" data-say="${esc(t)}" data-slow="1" title="השמעה איטית" aria-label="השמעה איטית">🐢</button>`;
 
   // ---------- progress logic ----------
-  const done = (id) => !!(user && user.lessons[id]);
+  const done = (id) => !!(user && CD().lessons[id]);
   const doneCount = () => LESSONS.filter((l) => done(l.id)).length;
   const unlocked = (id) => id === 1 || done(id) || done(id - 1);
   const nextLesson = () => { const l = LESSONS.find((x) => !done(x.id)); return l ? l.id : null; };
-  const attemptsOf = (id) => (user.attempts[id] || []);
+  const attemptsOf = (id) => (CD().attempts[id] || []);
   const bestOf = (id) => attemptsOf(id).reduce((b, a) => (!b || a.score / a.total > b.score / b.total ? a : b), null);
-  const openMistakes = () => Object.keys(user.mistakes || {}).filter((q) => QUESTIONS[q])
-    .sort((a, b) => (user.mistakes[a].at < user.mistakes[b].at ? -1 : 1));
+  const openMistakes = () => Object.keys(CD().mistakes || {}).filter((q) => QUESTIONS[q])
+    .sort((a, b) => (CD().mistakes[a].at < CD().mistakes[b].at ? -1 : 1));
   function streak() {
     const set = new Set(user.activeDates || []);
     const d = new Date(); let n = 0;
@@ -128,7 +151,7 @@
     return best;
   }
   const learnedWords = () => LESSONS.filter((l) => done(l.id) && !l.review).flatMap((l) => l.vocab.map((v) => Object.assign({ lesson: l.id }, v)));
-  function allAttempts() { return Object.entries(user.attempts || {}).flatMap(([k, arr]) => arr.map((a) => Object.assign({ key: k }, a))); }
+  function allAttempts() { return Object.entries(CD().attempts || {}).flatMap(([k, arr]) => arr.map((a) => Object.assign({ key: k }, a))); }
   function avgScore() {
     const ids = LESSONS.map((l) => l.id).filter((id) => attemptsOf(id).length);
     if (!ids.length) return null;
@@ -139,18 +162,18 @@
     { id: 'first', ic: '🌱', t: 'צעד ראשון', d: 'סיימתם את השיעור הראשון', ok: () => doneCount() >= 1 },
     { id: 'five', ic: '🖐️', t: 'חמישה שיעורים', d: 'סיימתם 5 שיעורים', ok: () => doneCount() >= 5 },
     { id: 'week', ic: '📅', t: 'שבוע שלם', d: 'סיימתם את שבוע 1', ok: () => done(7) },
-    { id: 'ten', ic: '🔟', t: '¡Diez!', d: 'סיימתם 10 שיעורים', ok: () => doneCount() >= 10 },
+    { id: 'ten', ic: '🔟', get t() { return INFO.ten; }, d: 'סיימתם 10 שיעורים', ok: () => doneCount() >= 10 },
     { id: 'half', ic: '🌓', t: 'חצי דרך', d: 'סיימתם 15 שיעורים', ok: () => doneCount() >= 15 },
     { id: 'twenty', ic: '🚀', t: 'עשרים!', d: 'סיימתם 20 שיעורים', ok: () => doneCount() >= 20 },
-    { id: 'all', ic: '🏆', t: 'אלופ/ת הספרדית', d: 'סיימתם את כל 30 השיעורים', ok: () => doneCount() >= 30 },
+    { id: 'all', ic: '🏆', get t() { return INFO.champ; }, d: 'סיימתם את כל 30 השיעורים', ok: () => doneCount() >= 30 },
     { id: 's3', ic: '🔥', t: 'רצף של 3', d: '3 ימים ברצף של למידה', ok: () => bestStreak() >= 3 },
     { id: 's7', ic: '🔥🔥', t: 'רצף של שבוע', d: '7 ימים ברצף של למידה', ok: () => bestStreak() >= 7 },
     { id: 's14', ic: '☄️', t: 'רצף של שבועיים', d: '14 ימים ברצף של למידה', ok: () => bestStreak() >= 14 },
     { id: 'perfect', ic: '💯', t: 'מושלם!', d: 'קיבלתם 100 בבוחן', ok: () => allAttempts().some((a) => a.total >= 8 && a.score === a.total) },
     { id: 'perfect5', ic: '🌟', t: 'כוכב/ת', d: '100 בחמישה בחנים שונים', ok: () => LESSONS.filter((l) => attemptsOf(l.id).some((a) => a.score === a.total)).length >= 5 },
-    { id: 'fix5', ic: '🔧', t: 'לומדים מטעויות', d: 'תיקנתם 5 טעויות קודמות', ok: () => (user.fixed || 0) >= 5 },
-    { id: 'fix20', ic: '🛠️', t: 'מתקנ/ת מקצועי/ת', d: 'תיקנתם 20 טעויות קודמות', ok: () => (user.fixed || 0) >= 20 },
-    { id: 'cards', ic: '🃏', t: 'שליטה בכרטיסיות', d: 'סיימתם 5 סבבי כרטיסיות', ok: () => (user.flashcards || 0) >= 5 },
+    { id: 'fix5', ic: '🔧', t: 'לומדים מטעויות', d: 'תיקנתם 5 טעויות קודמות', ok: () => (CD().fixed || 0) >= 5 },
+    { id: 'fix20', ic: '🛠️', t: 'מתקנ/ת מקצועי/ת', d: 'תיקנתם 20 טעויות קודמות', ok: () => (CD().fixed || 0) >= 20 },
+    { id: 'cards', ic: '🃏', t: 'שליטה בכרטיסיות', d: 'סיימתם 5 סבבי כרטיסיות', ok: () => (CD().flashcards || 0) >= 5 },
     { id: 'words100', ic: '📚', t: '100 מילים', d: 'למדתם 100 מילים', ok: () => learnedWords().length >= 100 },
     { id: 'words250', ic: '🧠', t: '250 מילים', d: 'למדתם 250 מילים', ok: () => learnedWords().length >= 250 },
   ];
@@ -171,8 +194,8 @@
     $app.innerHTML = `
       <div class="card login">
         <div class="hero">🇪🇸</div>
-        <h1><span lang="es" dir="ltr">¡Hola!</span> ברוכים הבאים</h1>
-        <p class="muted">קורס ספרדית למתחילים ב-30 יום.</p>
+        <h1>ברוכים הבאים! 👋</h1>
+        <p class="muted">קורסים למתחילים ב-30 יום: 🇪🇸 ספרדית ו-🇫🇷 צרפתית.</p>
         <div class="tabs"><button class="${su ? '' : 'on'}" data-m="login">כניסה</button><button class="${su ? 'on' : ''}" data-m="signup">הרשמה</button></div>
         <form id="lf">
           <label for="em"><b>כתובת מייל</b></label>
@@ -211,11 +234,29 @@
     };
   }
 
+  function viewCourses() {
+    const card = (c) => {
+      const info = COURSES[c]; const d = c === 'es' ? user : (user.courses && user.courses[c]) || EMPTY;
+      const n = Object.keys(d.lessons).length;
+      return `<a class="card lcard" href="#/home" data-course="${c}" style="padding:24px;flex-wrap:wrap">
+        <span class="em" style="font-size:2.6rem;width:72px;height:72px">${info.flag}</span>
+        <span style="flex:1 1 180px"><h2 style="margin:0">${info.name} <bdi dir="ltr" lang="${c}" class="muted small">${esc(info.brand)}</bdi></h2>
+        <span class="small muted">30 שיעורים למתחילים · כ-20 דקות ליום</span>
+        <div class="bar" style="margin-top:8px"><i style="width:${n / 30 * 100}%"></i></div>
+        <span class="small">${n ? `סיימתם ${n} מתוך 30` : 'עוד לא התחלתם'}</span></span>
+        <span class="btn" style="flex:1 1 100%">${n ? 'להמשיך' : 'להתחיל'} ←</span></a>`;
+    };
+    $app.innerHTML = `<h1>איזו שפה לומדים היום, ${esc(user.name)}? 🌍</h1>
+      <p class="muted">כל קורס נשמר בנפרד – אפשר ללמוד את שניהם ולעבור ביניהם מתי שרוצים.</p>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${card('es')}${card('fr')}</div>`;
+    $app.querySelectorAll('[data-course]').forEach((a) => a.onclick = () => { setCourse(a.dataset.course); });
+  }
+
   function viewHome() {
     const n = doneCount(); const nx = nextLesson(); const st = streak(); const avg = avgScore();
     const mist = openMistakes().length;
     const tiles = LESSONS.map((l) => {
-      const d = user.lessons[l.id];
+      const d = CD().lessons[l.id];
       const cls = d ? 'done' : (l.id === nx ? 'next' : (unlocked(l.id) ? '' : 'locked'));
       const sub = d ? `✓ ${fmtDate(d.date || d.completedAt)}` : (l.id === nx ? 'היום!' : '');
       return `<a class="day ${cls}" href="${unlocked(l.id) ? '#/lesson/' + l.id : '#/home'}" title="${esc(l.title)}">
@@ -223,8 +264,8 @@
     }).join('');
     $app.innerHTML = `
       <div class="card hello">
-        <h1>שלום, ${esc(user.name)}! 👋</h1>
-        <p style="margin:0">${n === 0 ? 'מוכנים להתחיל להרפתקה בספרדית? השיעור הראשון מחכה!' : n === 30 ? '¡Felicidades! סיימתם את כל הקורס! 🏆' : `כל הכבוד! סיימתם ${n} מתוך 30 שיעורים. ¡Vamos!`}</p>
+        <div class="row between"><h1 style="margin:0">שלום, ${esc(user.name)}! 👋</h1><a class="pill" href="#/courses" style="text-decoration:none">${INFO.flag} קורס ${INFO.name} · 🔄 החלפה</a></div>
+        <p style="margin:0">${n === 0 ? `מוכנים להתחיל להרפתקה ${INFO.inLang}? השיעור הראשון מחכה!` : n === 30 ? `${INFO.congrats} סיימתם את כל הקורס! 🏆` : `כל הכבוד! סיימתם ${n} מתוך 30 שיעורים. ¡Vamos!`}</p>
         <div class="stats">
           <div class="stat"><b>${n}/30</b>שיעורים</div>
           <div class="stat"><b>${st} 🔥</b>ימים ברצף</div>
@@ -249,7 +290,7 @@
       return `<a class="card lcard ${ul ? '' : 'locked'}" href="#/lesson/${l.id}">
         <span class="em">${ul ? l.emoji : '🔒'}</span>
         <span><span class="small muted">יום ${l.id}${l.review ? ' · חזרה' : ''}</span><h3>${mixed(l.title)}</h3>
-        ${d ? `<span class="pill ok">✓ נלמד ${fmtDate(user.lessons[l.id].date || user.lessons[l.id].completedAt)}</span>` : ul ? '<span class="pill">פתוח</span>' : '<span class="pill">נעול</span>'}
+        ${d ? `<span class="pill ok">✓ נלמד ${fmtDate(CD().lessons[l.id].date || CD().lessons[l.id].completedAt)}</span>` : ul ? '<span class="pill">פתוח</span>' : '<span class="pill">נעול</span>'}
         ${b ? ` <span class="pill purple">ציון ${Math.round(b.score / b.total * 100)}</span>` : ''}</span></a>`;
     }).join('');
     $app.innerHTML = `<h1>📘 שיעורים</h1><p class="muted">כל שיעור לוקח בערך 20 דקות: מילים, דקדוק, שיחה, תרגול ובוחן. שיעור חדש נפתח כשמסיימים את הקודם.</p><div class="grid">${cards}</div>`;
@@ -291,7 +332,7 @@
       body = `<div class="card"><h2>📐 ${mixed(g.title)}</h2>
         <ul class="gpoints">${g.points.map((p) => `<li>${mixed(p)}</li>`).join('')}</ul>
         <h3>דוגמאות</h3>
-        <table class="gtable">${g.table.map(([a, b]) => `<tr><td class="es" lang="es" dir="ltr">${esc(a)}</td><td>${mixed(b)}</td><td style="width:50px">${a.length < 60 ? `<button class="say" data-say="${esc(a.replace(/→/g, ','))}">🔊</button>` : ''}</td></tr>`).join('')}</table>
+        <table class="gtable">${g.table.map(([a, b]) => `<tr><td class="es" lang="${INFO.code}" dir="ltr">${esc(a)}</td><td>${mixed(b)}</td><td style="width:50px">${a.length < 60 ? `<button class="say" data-say="${esc(a.replace(/→/g, ','))}">🔊</button>` : ''}</td></tr>`).join('')}</table>
         ${g.tip ? `<div class="tip">💡 ${mixed(g.tip)}</div>` : ''}</div>${nav('לשיחה')}`;
     } else if (s.k === 'dialogue') {
       const speakers = [...new Set(l.dialogue.map((d) => d.who))];
@@ -305,7 +346,7 @@
         <div class="row" style="margin-top:14px"><button class="btn ghost" id="playAll">▶️ השמעת כל השיחה</button></div>
         <details style="margin-top:14px"><summary class="small">⚙️ בחירת קולות (אם שני הדוברים נשמעים אותו דבר)</summary><div id="vpick" style="margin-top:10px"></div></details></div>${nav('לתרגול')}`;
     } else if (s.k === 'practice') {
-      body = `<div class="card"><h2>🧩 משחק התאמה</h2><p class="muted">לחצו על מילה בספרדית ואז על התרגום שלה. כשמסיימים – ממשיכים לבוחן!</p><div id="match"></div></div>
+      body = `<div class="card"><h2>🧩 משחק התאמה</h2><p class="muted">לחצו על מילה ${INFO.inLang} ואז על התרגום שלה. כשמסיימים – ממשיכים לבוחן!</p><div id="match"></div></div>
         <div class="navrow"><a class="btn ghost" href="#/lesson/${id}/${stepIdx - 1}">→ הקודם</a><a class="btn" id="toQuiz" href="#/lesson/${id}/4">לבוחן ←</a></div>`;
     } else if (s.k === 'quiz') {
       body = `<div id="quiz"></div>`;
@@ -335,7 +376,7 @@
   function matchGame(el, vocab) {
     const pick = shuffle(vocab).slice(0, 6);
     const left = shuffle(pick), right = shuffle(pick);
-    el.innerHTML = `<div class="match"><div class="col">${left.map((v) => `<button class="mbtn es" lang="es" dir="ltr" data-k="${esc(v.es)}" data-side="es">${esc(v.es)}</button>`).join('')}</div>
+    el.innerHTML = `<div class="match"><div class="col">${left.map((v) => `<button class="mbtn es" lang="${INFO.code}" dir="ltr" data-k="${esc(v.es)}" data-side="es">${esc(v.es)}</button>`).join('')}</div>
       <div class="col">${right.map((v) => `<button class="mbtn" data-k="${esc(v.es)}" data-side="he">${esc(v.he)}</button>`).join('')}</div></div>
       <p id="mres" class="center" style="font-weight:700;min-height:1.6em"></p>`;
     let sel = null, matched = 0;
@@ -344,7 +385,7 @@
       if (!sel || sel.dataset.side === b.dataset.side) { if (sel) sel.classList.remove('sel'); sel = b; b.classList.add('sel'); return; }
       if (sel.dataset.k === b.dataset.k) {
         sel.classList.remove('sel'); sel.classList.add('ok'); b.classList.add('ok'); matched++;
-        if (matched === pick.length) document.getElementById('mres').innerHTML = '🎉 ¡Muy bien! כל ההתאמות נכונות! עכשיו לבוחן.';
+        if (matched === pick.length) document.getElementById('mres').innerHTML = `🎉 ${INFO.veryGood} כל ההתאמות נכונות! עכשיו לבוחן.`;
       } else {
         [sel, b].forEach((x) => { x.classList.remove('sel'); x.classList.add('no'); setTimeout(() => x.classList.remove('no'), 400); });
       }
@@ -379,7 +420,7 @@
       });
       const last = i === qs.length - 1;
       document.getElementById('fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}">
-        <b>${ok ? shuffle(['✅ נכון! ¡Muy bien!', '✅ מצוין! ¡Perfecto!', '✅ כל הכבוד! ¡Genial!', '✅ בדיוק! ¡Excelente!'])[0] : '❌ לא בדיוק… התשובה הנכונה: ' + mixed(q.right)}</b>
+        <b>${ok ? shuffle(INFO.cheers)[0] : '❌ לא בדיוק… התשובה הנכונה: ' + mixed(q.right)}</b>
         ${mixed(q.x)}</div>
         <div class="navrow"><span></span><button class="btn" id="nextQ">${last ? 'לתוצאות 🏁' : 'לשאלה הבאה ←'}</button></div>`;
       const nb = document.getElementById('nextQ'); nb.focus({ preventScroll: true });
@@ -398,14 +439,14 @@
       } catch (e) { toast('לא הצלחנו לשמור את התוצאה – בדקו את החיבור לאינטרנט'); }
       const pct = Math.round(score / total * 100);
       const stars = pct === 100 ? '⭐⭐⭐' : pct >= 75 ? '⭐⭐' : pct >= 50 ? '⭐' : '💪';
-      const msg = pct === 100 ? '¡Perfecto! ציון מושלם!' : pct >= 75 ? '¡Muy bien! עבודה מצוינת!' : pct >= 50 ? '¡Bien! ממשיכים להתאמן.' : 'לא נורא! טעויות הן חלק מהלמידה. ננסה שוב?';
+      const msg = pct === 100 ? `${INFO.perfect} ציון מושלם!` : pct >= 75 ? `${INFO.veryGood} עבודה מצוינת!` : pct >= 50 ? `${INFO.good} ממשיכים להתאמן.` : 'לא נורא! טעויות הן חלק מהלמידה. ננסה שוב?';
       const wrong = results.filter((r) => !r.correct);
       const nx = ctx.mode === 'lesson' && ctx.lessonId < 30 ? ctx.lessonId + 1 : null;
       el.innerHTML = `<div class="card center">
           <div class="stars">${stars}</div>
           <div class="score">${score} / ${total}</div>
           <h2>${mixed(msg)}</h2>
-          ${ctx.mode === 'lesson' ? `<p>🎉 סיימתם את יום ${ctx.lessonId}!${ctx.lessonId === 30 ? ' ¡Felicidades! סיימתם את כל הקורס!' : ''}</p>` : ''}
+          ${ctx.mode === 'lesson' ? `<p>🎉 סיימתם את יום ${ctx.lessonId}!${ctx.lessonId === 30 ? ` ${INFO.congrats} סיימתם את כל הקורס!` : ''}</p>` : ''}
           ${wrong.length ? `<p class="muted small">השאלות שטעיתם בהן יחזרו בבוחן של השיעור הבא, כדי לבדוק שהבנתם 💡</p>` : ''}
           <div class="row" style="justify-content:center">
             ${ctx.lessonId === 30 && ctx.mode === 'lesson' ? '<a class="btn big" href="#/certificate">📜 לתעודה שלי</a>' : ''}
@@ -437,7 +478,7 @@
       <div class="card hello"><h2>🔁 תרגול טעויות</h2>
         <p style="margin-top:0">${mist.length ? `יש ${mist.length} שאלות שעוד לא תוקנו. כשעונים עליהן נכון – הן יוצאות מהרשימה!` : 'אין טעויות פתוחות – ¡Genial! 🎉'}</p>
         ${mist.length ? '<a class="btn alt" href="#/mistakes">לתרגל את הטעויות שלי</a>' : ''}
-        ${user.attempts.mistakes ? ' <a class="btn ghost" href="#/results/mistakes">📊 היסטוריית תרגול טעויות</a>' : ''}</div>
+        ${CD().attempts.mistakes ? ' <a class="btn ghost" href="#/results/mistakes">📊 היסטוריית תרגול טעויות</a>' : ''}</div>
       <div class="grid">${rows}</div>`;
   }
 
@@ -456,7 +497,7 @@
 
   function viewResults(key) {
     const isM = key === 'mistakes'; const l = byId[key];
-    const at = (user.attempts[key] || []).slice().reverse();
+    const at = (CD().attempts[key] || []).slice().reverse();
     if (!at.length) return go('#/quizzes');
     $app.innerHTML = `<a href="#/quizzes" class="small">→ לכל הבחנים</a>
       <h1>📊 ${isM ? 'תרגול טעויות' : `${l.emoji} תוצאות יום ${l.id}`}</h1>
@@ -465,7 +506,7 @@
         <span class="pill ${a.score === a.total ? 'ok' : a.score / a.total >= .75 ? 'purple' : 'bad'}">${a.score}/${a.total} (${Math.round(a.score / a.total * 100)})</span></div>
         ${a.wrong && a.wrong.length ? a.wrong.filter((q) => QUESTIONS[q]).map((qid) => { const q = QUESTIONS[qid]; return `<div class="review"><b>${mixed(q.q)}</b>${q.say ? ` <span class="small muted">(${es(q.say)})</span>` : ''}<br>
           ${a.picked && a.picked[qid] ? `<span class="pill bad">עניתם: ${mixed(a.picked[qid])}</span> ` : ''}<span class="pill ok">נכון: ${mixed(q.o[0])}</span>
-          ${user.mistakes[qid] ? '' : ' <span class="pill purple">✓ תוקן מאז</span>'}<br><span class="small">${mixed(q.x)}</span></div>`; }).join('') : '<p class="muted" style="margin:6px 0 0">כל התשובות נכונות! 💯</p>'}</div>`).join('')}`;
+          ${CD().mistakes[qid] ? '' : ' <span class="pill purple">✓ תוקן מאז</span>'}<br><span class="small">${mixed(q.x)}</span></div>`; }).join('') : '<p class="muted" style="margin:6px 0 0">כל התשובות נכונות! 💯</p>'}</div>`).join('')}`;
   }
 
   function viewWords() {
@@ -474,7 +515,7 @@
     let showAll = false;
     $app.innerHTML = `<h1>📚 המילון שלי</h1>
       <p class="muted">כל המילים מהשיעורים שסיימתם (${words.length} מילים). לחצו 🔊 כדי לשמוע.</p>
-      <input class="search" id="q" placeholder="🔍 חיפוש בעברית או בספרדית…">
+      <input class="search" id="q" placeholder="🔍 חיפוש בעברית או ${INFO.inLang}…">
       <label class="small"><input type="checkbox" id="all"> להציג גם מילים משיעורים שעוד לא למדתם</label>
       <div id="list" style="margin-top:12px"></div>`;
     const render = () => {
@@ -497,14 +538,14 @@
       $app.innerHTML = `<h1>🃏 כרטיסיות</h1><div class="card center"><p>הכרטיסיות ייפתחו אחרי שתסיימו את השיעור הראשון 🌱</p><a class="btn" href="#/lesson/1">ליום 1</a></div>`;
       return;
     }
-    $app.innerHTML = `<h1>🃏 כרטיסיות</h1><p class="muted">בחרו חפיסה. רואים מילה בספרדית, מנסים להיזכר בתרגום, ואז הופכים את הכרטיס.</p>
+    $app.innerHTML = `<h1>🃏 כרטיסיות</h1><p class="muted">בחרו חפיסה. רואים מילה ${INFO.inLang}, מנסים להיזכר בתרגום, ואז הופכים את הכרטיס.</p>
       <div class="card"><div class="row">
         <select id="deck" class="search" style="max-width:360px;margin:0">
           <option value="all">כל המילים שלמדתי (${learnedWords().length})</option>
           <option value="mix">10 מילים אקראיות</option>
           ${learned.map((l) => `<option value="${l.id}">יום ${l.id}: ${esc(l.title)}</option>`).join('')}
         </select>
-        <label class="small"><input type="checkbox" id="rev"> הפוך: עברית ← ספרדית</label>
+        <label class="small"><input type="checkbox" id="rev"> הפוך: עברית ← ${INFO.name}</label>
         <button class="btn" id="go">להתחיל ▶️</button></div></div><div id="fc"></div>`;
     document.getElementById('go').onclick = () => {
       const v = document.getElementById('deck').value; const rev = document.getElementById('rev').checked;
@@ -516,13 +557,13 @@
         if (i >= cards.length) {
           if (again.length) { cards = shuffle(again.splice(0)); i = 0; toast('סבב נוסף על המילים שעוד לא ידעתם 💪'); return show(); }
           update(() => api('flashcards-done', { date: today() })).catch(() => {});
-          fc.innerHTML = `<div class="card center"><div class="stars">🎉</div><h2>¡Muy bien! סיימתם את החפיסה</h2><p>ידעתם ${know} מילים בפעם הראשונה.</p><button class="btn" id="go2">עוד סבב</button></div>`;
+          fc.innerHTML = `<div class="card center"><div class="stars">🎉</div><h2>${mixed(INFO.veryGood)} סיימתם את החפיסה</h2><p>ידעתם ${know} מילים בפעם הראשונה.</p><button class="btn" id="go2">עוד סבב</button></div>`;
           document.getElementById('go2').onclick = () => document.getElementById('go').click();
           return;
         }
         const c = cards[i];
-        const front = rev ? `<div class="em">${c.em || ''}</div><div class="w">${esc(c.he)}</div>` : `<div class="em">${c.em || ''}</div><div class="w" lang="es" dir="ltr">${esc(c.es)}</div><button class="say" data-say="${esc(c.es)}">🔊</button>`;
-        const back = rev ? `<div class="w" lang="es" dir="ltr">${esc(c.es)}</div><div class="small">${esc(c.pr)}</div><button class="say" data-say="${esc(c.es)}">🔊</button>` : `<div class="w">${esc(c.he)}</div><div class="small">הגייה: ${esc(c.pr)}</div>`;
+        const front = rev ? `<div class="em">${c.em || ''}</div><div class="w">${esc(c.he)}</div>` : `<div class="em">${c.em || ''}</div><div class="w" lang="${INFO.code}" dir="ltr">${esc(c.es)}</div><button class="say" data-say="${esc(c.es)}">🔊</button>`;
+        const back = rev ? `<div class="w" lang="${INFO.code}" dir="ltr">${esc(c.es)}</div><div class="small">${esc(c.pr)}</div><button class="say" data-say="${esc(c.es)}">🔊</button>` : `<div class="w">${esc(c.he)}</div><div class="small">הגייה: ${esc(c.pr)}</div>`;
         fc.innerHTML = `<p class="center muted">כרטיס ${i + 1} מתוך ${cards.length}</p>
           <div class="flip" id="card"><div class="in"><div class="face">${front}<p class="small muted">לחצו כדי להפוך</p></div><div class="face back">${back}</div></div></div>
           <div class="row" style="justify-content:center;margin-top:16px" id="ans" hidden>
@@ -546,11 +587,11 @@
   function viewCertificate() {
     if (!done(30)) { toast('התעודה תחכה לכם בסוף יום 30 📜'); return go('#/home'); }
     const avg = avgScore();
-    $app.innerHTML = `<div class="cert card"><div style="font-size:3.5rem">🏆🇪🇸</div><h1>תעודת סיום</h1>
+    $app.innerHTML = `<div class="cert card"><div style="font-size:3.5rem">🏆${INFO.flag}</div><h1>תעודת סיום</h1>
       <p>מוענקת בגאווה ל</p><div class="name">${esc(user.name)}</div>
-      <p>על השלמת הקורס <b lang="es" dir="ltr">¡Vamos!</b> – ספרדית למתחילים ב-30 יום</p>
-      <p>${learnedWords().length} מילים · ציון ממוצע ${avg == null ? '–' : avg} · ${fmtDate(user.lessons[30].completedAt)}</p>
-      <p style="font-size:1.4rem" lang="es" dir="ltr">¡Enhorabuena! 🎉</p></div>
+      <p>על השלמת הקורס <b lang="${INFO.code}" dir="ltr">${esc(INFO.brand)}</b> – ${INFO.name} למתחילים ב-30 יום</p>
+      <p>${learnedWords().length} מילים · ציון ממוצע ${avg == null ? '–' : avg} · ${fmtDate(CD().lessons[30].completedAt)}</p>
+      <p style="font-size:1.4rem" lang="${INFO.code}" dir="ltr">${esc(INFO.cert)} 🎉</p></div>
       <div class="center noprint"><button class="btn" onclick="window.print()">🖨️ הדפסה / שמירה כ-PDF</button></div>`;
   }
 
@@ -567,13 +608,20 @@
     let users;
     try { users = (await fetch('/api/admin/users', { headers: { 'X-Admin-Pin': pin } }).then((r) => { if (!r.ok) throw r; return r.json(); })).users; }
     catch (e) { sessionStorage.removeItem('vamos_pin'); return ask('קוד שגוי'); }
-    const summary = (u) => {
-      const ids = Object.keys(u.lessons).map(Number);
-      const best = (id) => (u.attempts[id] || []).reduce((b, a) => Math.max(b, a.score / a.total), 0);
-      const scored = LESSONS.map((l) => l.id).filter((id) => (u.attempts[id] || []).length);
+    const dataOf = (u, c) => (c === 'es' ? u : (u.courses && u.courses[c]) || null);
+    const summary = (u, c) => {
+      const d = dataOf(u, c) || EMPTY;
+      const ids = Object.keys(d.lessons).map(Number);
+      const best = (id) => (d.attempts[id] || []).reduce((b, a) => Math.max(b, a.score / a.total), 0);
+      const scored = ids.concat(Object.keys(d.attempts).map(Number)).filter((id, i, a) => id >= 1 && a.indexOf(id) === i && (d.attempts[id] || []).length);
       const avg = scored.length ? Math.round(scored.reduce((s, id) => s + best(id), 0) / scored.length * 100) : null;
       const last = (u.activeDates || []).slice(-1)[0];
-      return { ids, avg, last, best, mist: Object.keys(u.mistakes || {}).length };
+      return { d, ids, avg, last, best, mist: Object.keys(d.mistakes || {}).length };
+    };
+    const trackerFor = (u, c) => {
+      const s = summary(u, c); const lessons = COURSES[c].lessons;
+      return `<h3 style="margin-top:14px">${COURSES[c].flag} ${COURSES[c].name} – ${s.ids.length}/30 · ציון ממוצע ${s.avg == null ? '–' : s.avg} · טעויות פתוחות ${s.mist} · תוקנו ${s.d.fixed || 0}</h3>
+        <div class="tracker">${lessons.map((l) => { const d = s.d.lessons[l.id]; const at = s.d.attempts[l.id] || []; return `<div class="day ${d ? 'done' : ''}" title="${esc(l.title)}"><span class="n">${l.id}</span><span>${d ? fmtDate(d.date || d.completedAt) : '–'}</span>${at.length ? `<span>${Math.round(s.best(l.id) * 100)} (${at.length}×)</span>` : ''}</div>`; }).join('')}</div>`;
     };
     let rem = null;
     try { rem = await fetch('/api/admin/reminders', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); } catch (e) { rem = null; }
@@ -584,11 +632,11 @@
       <p style="margin-top:0">${rem.configured ? `✅ מחובר. כל יום בשעה <b>${esc(rem.time)}</b> נבדק מי לא עשה שיעור היום, ונשלחת אליו תזכורת (תבנית: <bdi dir="ltr">${esc(rem.template)}</bdi>).` : '⚠️ וואטסאפ עוד לא מוגדר בשרת.'}</p>
       ${rem.log && rem.log.length ? `<details><summary>יומן שליחות אחרונות (${rem.log.length})</summary><table class="tbl">${rem.log.slice(0, 15).map((l) => `<tr><td>${fmtDate(l.at)} ${new Date(l.at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td><td dir="ltr" style="text-align:right">${esc(l.email)}</td><td>${l.ok ? '✅ נשלח' : '❌ ' + esc(l.error || '')}</td></tr>`).join('')}</table></details>` : ''}</div>` : '';
     $app.innerHTML = `<div class="row between"><h1>👨‍👩‍👧 אזור הורים</h1><button class="btn ghost" id="out">יציאה מאזור ההורים</button></div>
-      <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>שיעורים</th><th>ציון ממוצע</th><th>טעויות פתוחות</th><th>תוקנו</th><th>פעילות אחרונה</th></tr>
-      ${users.map((u, k) => { const s = summary(u); return `<tr><td><b>${esc(u.name || '—')}</b></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${s.ids.length}/30</td><td>${s.avg == null ? '–' : s.avg}</td><td>${s.mist}</td><td>${u.fixed || 0}</td><td>${s.last ? fmtDate(s.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="7">אין עדיין משתמשים</td></tr>'}
+      <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>🇪🇸 ספרדית</th><th>🇫🇷 צרפתית</th><th>טעויות פתוחות</th><th>פעילות אחרונה</th></tr>
+      ${users.map((u) => { const a = summary(u, 'es'), b = summary(u, 'fr'); return `<tr><td><b>${esc(u.name || '—')}</b></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${a.ids.length}/30 · ${a.avg == null ? '–' : a.avg}</td><td>${dataOf(u, 'fr') ? `${b.ids.length}/30 · ${b.avg == null ? '–' : b.avg}` : '–'}</td><td>${a.mist + b.mist}</td><td>${a.last ? fmtDate(a.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6">אין עדיין משתמשים</td></tr>'}
       </table></div>
       ${remCard}
-      ${users.map((u) => { const s = summary(u); return `<div class="card"><h2>${esc(u.name || u.email)}</h2>
+      ${users.map((u) => `<div class="card"><h2>${esc(u.name || u.email)}</h2>
         <div class="row" style="margin-bottom:12px">
           <label class="small">📱 טלפון לתזכורות: <input class="search" style="width:190px;margin:0;direction:ltr" data-ph="${esc(u.email)}" value="${esc(u.phone || '')}" placeholder="05X-XXXXXXX"></label>
           <label class="small"><input type="checkbox" data-off="${esc(u.email)}" ${u.remindersOff ? 'checked' : ''}> השהיית תזכורות</label>
@@ -596,7 +644,7 @@
           ${u.phone ? `<button class="btn alt" data-test="${esc(u.email)}">שליחת תזכורת לבדיקה</button>` : ''}
           <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
         </div>
-        <div class="tracker">${LESSONS.map((l) => { const d = u.lessons[l.id]; const at = u.attempts[l.id] || []; return `<div class="day ${d ? 'done' : ''}" title="${esc(l.title)}"><span class="n">${l.id}</span><span>${d ? fmtDate(d.date || d.completedAt) : '–'}</span>${at.length ? `<span>${Math.round(s.best(l.id) * 100)} (${at.length}×)</span>` : ''}</div>`; }).join('')}</div></div>`; }).join('')}`;
+        ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}</div>`).join('')}`;
     document.getElementById('out').onclick = () => { sessionStorage.removeItem('vamos_pin'); go(user ? '#/home' : '#/'); };
     $app.querySelectorAll('[data-save]').forEach((b) => b.onclick = async () => {
       const em = b.dataset.save;
@@ -625,11 +673,16 @@
     }
     document.getElementById('topbar').hidden = false;
     document.getElementById('username').textContent = '👤 ' + user.name;
-    const navKey = { lesson: 'lessons', quiz: 'quizzes', results: 'quizzes', mistakes: 'quizzes', certificate: 'badges' }[r] || r;
+    document.getElementById('brandflag').textContent = INFO.flag;
+    document.getElementById('brandname').textContent = INFO.brand;
+    document.getElementById('brandname').lang = INFO.code;
+    if (!localStorage.getItem('vamos_course') && r !== 'courses') return go('#/courses');
+    const navKey = { courses: 'home', lesson: 'lessons', quiz: 'quizzes', results: 'quizzes', mistakes: 'quizzes', certificate: 'badges' }[r] || r;
     document.querySelectorAll('#mainnav a').forEach((a) => a.classList.toggle('on', a.dataset.r === navKey));
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     switch (r) {
       case 'home': return viewHome();
+      case 'courses': return viewCourses();
       case 'lessons': return viewLessons();
       case 'lesson': return viewLesson(Number(parts[1]), parts[2]);
       case 'quizzes': return viewQuizzes();
@@ -645,5 +698,7 @@
   }
   document.getElementById('logout').onclick = () => { localStorage.removeItem('vamos_email'); user = null; go('#/'); viewLogin(); };
   window.addEventListener('hashchange', route);
+  let saved = 'es'; try { saved = localStorage.getItem('vamos_course') || 'es'; } catch (e) {}
+  setCourse(saved, false);
   route();
 })();

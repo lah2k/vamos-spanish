@@ -1,4 +1,4 @@
-// ¡Vamos! — Spanish course for Hebrew speakers. Zero-dependency Node server.
+// ¡Vamos! — Spanish & French courses for Hebrew speakers. Zero-dependency Node server.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +17,25 @@ const WA = {
   lang: process.env.WA_LANG || 'he',
   time: process.env.REMINDER_TIME || '15:30',
   until: process.env.REMINDER_UNTIL || '21:00',
+  params: (process.env.WA_PARAMS || 'name').split(',').map((x) => x.trim()).filter(Boolean),
 };
+// Spanish progress lives at the top level of the user record (as it always has);
+// other courses live under user.courses[code].
+const COURSES = ['es', 'fr'];
+const courseOf = (b) => (COURSES.includes(b && b.course) ? b.course : 'es');
+function cdata(u, c) {
+  if (c === 'es') return u;
+  u.courses = u.courses || {};
+  return (u.courses[c] = u.courses[c] || { lessons: {}, attempts: {}, mistakes: {}, fixed: 0, flashcards: 0 });
+}
+function allLessons(u) {
+  return [u.lessons].concat(Object.values(u.courses || {}).map((c) => c.lessons)).flatMap((l) => Object.values(l || {}));
+}
+function allFinished(u) {
+  const counts = [Object.keys(u.lessons).length].concat(Object.values(u.courses || {}).map((c) => Object.keys(c.lessons).length));
+  const started = counts.filter((n) => n > 0);
+  return started.length > 0 && started.every((n) => n >= 30);
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let db = { users: {} };
@@ -139,9 +157,10 @@ async function api(req, res, url) {
     const list = Object.values(db.users)
       .filter((u) => !url.searchParams.get('email') || u.email === normEmail(url.searchParams.get('email')))
       .map((u) => {
-        const doneToday = Object.values(u.lessons).some((l) => l.date === today || (l.completedAt && new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(l.completedAt)) === today));
+        const doneToday = allLessons(u).some((l) => l.date === today || (l.completedAt && new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(l.completedAt)) === today));
         const count = Object.keys(u.lessons).length;
-        return { email: u.email, name: u.name, today, doneToday, lessonsDone: count, finished: count >= 30, nextLesson: count >= 30 ? null : count + 1 };
+        const fr = (u.courses && u.courses.fr) ? Object.keys(u.courses.fr.lessons).length : 0;
+        return { email: u.email, name: u.name, today, doneToday, lessonsDone: count, frenchDone: fr, finished: allFinished(u), nextLesson: count >= 30 ? null : count + 1 };
       });
     return send(res, 200, { today, users: list });
   }
@@ -183,7 +202,8 @@ async function api(req, res, url) {
   if (route === '/api/lesson-complete' && method === 'POST') {
     const id = Number(body.lessonId);
     if (!(id >= 1 && id <= 30)) return send(res, 400, { error: 'bad lesson' });
-    if (!u.lessons[id]) u.lessons[id] = { completedAt: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null };
+    const d = cdata(u, courseOf(body));
+    if (!d.lessons[id]) d.lessons[id] = { completedAt: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null };
     markActive(u, body.date); save();
     return send(res, 200, { user: publicUser(u) });
   }
@@ -192,6 +212,7 @@ async function api(req, res, url) {
     const isMistakes = body.mode === 'mistakes';
     const id = isMistakes ? 'mistakes' : Number(body.lessonId);
     if (!isMistakes && !(id >= 1 && id <= 30)) return send(res, 400, { error: 'bad lesson' });
+    const d = cdata(u, courseOf(body));
     const results = Array.isArray(body.results) ? body.results.slice(0, 60) : [];
     const wrong = [];
     const picked = {};
@@ -201,14 +222,14 @@ async function api(req, res, url) {
       if (!qid) continue;
       if (r.correct) {
         score++;
-        if (u.mistakes[qid]) { delete u.mistakes[qid]; u.fixed++; }
+        if (d.mistakes[qid]) { delete d.mistakes[qid]; d.fixed++; }
       } else {
         wrong.push(qid);
         picked[qid] = String(r.picked || '').slice(0, 120);
-        u.mistakes[qid] = { lessonId: Number(r.lessonId) || Number(id) || 0, at: new Date().toISOString() };
+        d.mistakes[qid] = { lessonId: Number(r.lessonId) || Number(id) || 0, at: new Date().toISOString() };
       }
     }
-    (u.attempts[id] = u.attempts[id] || []).push({
+    (d.attempts[id] = d.attempts[id] || []).push({
       at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null,
       score, total: results.length, wrong, picked,
       mode: ['mistakes', 'lesson', 'retake'].includes(body.mode) ? body.mode : 'quiz',
@@ -218,7 +239,7 @@ async function api(req, res, url) {
   }
 
   if (route === '/api/flashcards-done' && method === 'POST') {
-    u.flashcards++; markActive(u, body.date); save();
+    cdata(u, courseOf(body)).flashcards++; markActive(u, body.date); save();
     return send(res, 200, { user: publicUser(u) });
   }
 
@@ -233,7 +254,7 @@ function tzNow() {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, hm: `${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}` };
 }
 function lessonDoneOn(u, date) {
-  return Object.values(u.lessons).some((l) => l.date === date || (l.completedAt && new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(l.completedAt)) === date));
+  return allLessons(u).some((l) => l.date === date || (l.completedAt && new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(l.completedAt)) === date));
 }
 function logReminder(entry) {
   db.reminders.log.unshift(Object.assign({ at: new Date().toISOString() }, entry));
@@ -244,10 +265,10 @@ async function sendWhatsApp(u, template) {
   if (!u.phone) return { ok: false, error: 'no phone number' };
   const tpl = template || WA.template;
   const count = Object.keys(u.lessons).length;
+  const values = { name: u.name || 'שלום', day: String(Math.min(count + 1, 30)) };
   const body = tpl === 'hello_world'
     ? { name: 'hello_world', language: { code: 'en_US' } }
-    : { name: tpl, language: { code: WA.lang }, components: [{ type: 'body', parameters: [
-        { type: 'text', text: u.name || 'שלום' }, { type: 'text', text: String(Math.min(count + 1, 30)) }] }] };
+    : { name: tpl, language: { code: WA.lang }, components: WA.params.length ? [{ type: 'body', parameters: WA.params.map((k) => ({ type: 'text', text: values[k] || '' })) }] : [] };
   try {
     const r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}/messages`, {
       method: 'POST',
@@ -269,7 +290,7 @@ async function reminderTick() {
   const sent = db.reminders.sent[date] = db.reminders.sent[date] || {};
   for (const u of Object.values(db.users)) {
     if (!u.phone || u.remindersOff || sent[u.email]) continue;
-    if (Object.keys(u.lessons).length >= 30) continue;
+    if (allFinished(u)) continue;
     sent[u.email] = 'checking'; save();
     if (lessonDoneOn(u, date)) { sent[u.email] = 'done-already'; save(); continue; }
     const r = await sendWhatsApp(u);
