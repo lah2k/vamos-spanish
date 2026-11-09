@@ -1,4 +1,5 @@
-# ¡Vamos! on a VPS: app pulls the latest code from GitHub on every (re)start, Caddy serves HTTPS.
+# ¡Vamos! on the VPS: pulls the latest code from GitHub on every (re)start.
+# Host nginx proxies lahav.biz -> 127.0.0.1:3001 (TLS by certbot).
 services:
   app:
     image: node:22-alpine
@@ -7,21 +8,10 @@ services:
       DATA_DIR: /data
       PORT: "3000"
       ADMIN_PIN: "${ADMIN_PIN}"
+    ports:
+      - "127.0.0.1:3001:3000"
     volumes:
       - vamos-data:/data
     command: ["sh", "-c", "rm -rf /app && mkdir -p /app && wget -qO- https://codeload.github.com/lah2k/vamos-spanish/tar.gz/refs/heads/master | tar xz -C /app --strip-components=1 && cd /app && exec node server.js"]
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on: [app]
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - caddy-data:/data
-      - caddy-config:/config
-    command: ["sh", "-c", "printf 'lahav.biz, www.lahav.biz {\\n  encode gzip\\n  reverse_proxy app:3000\\n}\\n' > /etc/caddy/Caddyfile && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
 volumes:
   vamos-data:
-  caddy-data:
-  caddy-config:
