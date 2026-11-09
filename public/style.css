@@ -252,3 +252,5 @@ details.wbq { border: 1px solid var(--line); border-radius: 14px; padding: 10px 
 details.wbq summary { cursor: pointer; }
 details.wbq .ans { margin-top: 8px; background: var(--ok-l); border-radius: 10px; padding: 8px 12px; }
 .opt.sel { border-color: var(--purple); background: var(--purple-l); }
+.opt.missed { background: #fff; border: 2px dashed var(--ok); color: #1b6b2e; }
+.opt.dim { opacity: .55; }

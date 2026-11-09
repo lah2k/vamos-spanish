@@ -759,8 +759,10 @@
     WBC = WBM[m];
     return WBC;
   }
+  const cleanTitle = (t) => String(t).replace(/\s*\(\d+\s*(?:דק׳|דקות|דק')\)\s*$/, '');
+  const readMin = (html) => { const w = String(html || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').split(/\s+/).filter(Boolean).length; return Math.max(1, Math.round(w / 120)); };
   function wbSteps() {
-    const s = WBC.sections.map((x, i) => ({ key: 's' + i, href: `#/wb/${CUR}/s/` + i, title: x.title, sid: x.id, icon: /^סרטון/.test(x.title) ? '🎬' : /^קריאה/.test(x.title) ? '📖' : /^משימת/.test(x.title) ? '✅' : 'ℹ️' }));
+    const s = WBC.sections.map((x, i) => ({ key: 's' + i, href: `#/wb/${CUR}/s/` + i, title: cleanTitle(x.title), min: readMin(x.html), sid: x.id, icon: /^סרטון/.test(x.title) ? '🎬' : /^קריאה/.test(x.title) ? '📖' : /^משימת/.test(x.title) ? '✅' : 'ℹ️' }));
     if (CUR === 1) {
       s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
@@ -769,7 +771,7 @@
     if (CUR === 3) s.push({ key: 'kindlog', href: '#/wb/3/kindlog', title: 'היומן שלי: טוב לב וקשר חברתי', icon: '🤝', done: Object.keys(WB().kindlog || {}).length > 0 });
     if (CUR === 2) s.push({ key: 'journal', href: '#/wb/2/journal', title: 'היומן שלי: הנאה מודעת ותודה', icon: '📔', done: Object.keys(WB().journal || {}).length > 0 });
     if (WBC.quiz) s.push({ key: 'quiz', href: `#/wb/${CUR}/quiz`, title: `בוחן מודול ${CUR}`, icon: '📝', done: !!((WB().quiz || {})[CUR] || []).length });
-    s.push({ key: 'review', href: `#/wb/${CUR}/review`, title: WBC.review.title, sid: CUR === 1 ? 'review' : `m${CUR}:review`, icon: '❓' });
+    s.push({ key: 'review', href: `#/wb/${CUR}/review`, min: readMin(WBC.review.items.map((q) => q.q + ' ' + q.a).join(' ')), title: WBC.review.title, sid: CUR === 1 ? 'review' : `m${CUR}:review`, icon: '❓' });
     s.forEach((x) => { if (x.done == null) x.done = !!WB().read[x.sid]; });
     return s;
   }
@@ -804,7 +806,7 @@
         <div class="row">${next ? `<a class="btn big" href="${next.href}">${next.icon} ${n ? 'להמשיך' : 'להתחיל'}: ${next.title}</a>` : `<span class="pill ok">🎉 סיימתם את מודול ${CUR}!</span>${WBMODS.some((m) => m.module === CUR + 1) ? ` <a class="btn" href="#/wb/${CUR + 1}">למודול ${CUR + 1} ←</a>` : ''}`}
         ${last && CUR === 1 ? `<a class="btn alt" href="#/wb/1/perma/results">📊 התוצאות שלי</a>` : ''}</div>
       </div>
-      <div class="card"><h2>📋 חלקי המודול</h2><div class="wbsteps">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b></span></a>`).join('')}</div></div>`;
+      <div class="card"><h2>📋 חלקי המודול</h2><div class="wbsteps">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b>${x.min ? `<span class="small muted" style="display:block">⏱️ כ-${x.min} דק׳ קריאה</span>` : ''}</span></a>`).join('')}</div></div>`;
   }
   function wbNav(i) {
     const steps = wbSteps(); const j = steps.findIndex((x) => x.key === i);
@@ -820,7 +822,7 @@
     if (/^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
     $app.innerHTML = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
-      <article class="card wbtext"><h1>${s.title}</h1>${html}</article>${wbNav('s' + i)}`;
+      <article class="card wbtext"><h1>${cleanTitle(s.title)}</h1><p class="small muted" style="margin-top:-6px">⏱️ זמן קריאה: כ-${readMin(s.html)} דק׳</p>${html}</article>${wbNav('s' + i)}`;
     $app.querySelector('[data-next]').addEventListener('click', () => wbMark(s.id));
     window.scrollTo(0, 0);
   }
@@ -918,7 +920,7 @@
       <p class="small muted">${n} מתוך ${all.length} חלקים הושלמו · ${WBMODS.length} מודולים</p>
       <div class="row">${next ? `<a class="btn big" href="${next.st.href}">${next.st.icon} ${n ? 'להמשיך' : 'להתחיל'}: מודול ${next.x.m.module} – ${next.st.title}</a>` : '<span class="pill ok">🎉 סיימתם את כל המודולים שכאן!</span>'}</div></div>
       ${mods.map(({ m, steps }) => { const d = steps.filter((x) => x.done).length; return `<div class="card"><div class="row between"><h2 style="margin:0"><a href="#/wb/${m.module}" style="color:inherit;text-decoration:none">${esc(m.title)}</a></h2><span class="pill ${d === steps.length ? 'ok' : ''}">${d}/${steps.length}</span></div>
-        <div class="wbsteps" style="margin-top:12px">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b></span></a>`).join('')}</div></div>`; }).join('')}`;
+        <div class="wbsteps" style="margin-top:12px">${steps.map((x, i) => `<a class="card lcard ${x.done ? 'done' : ''}" href="${x.href}"><span class="em">${x.done ? '✅' : x.icon}</span><span><b>${i + 1}. ${x.title}</b>${x.min ? `<span class="small muted" style="display:block">⏱️ כ-${x.min} דק׳ קריאה</span>` : ''}</span></a>`).join('')}</div></div>`; }).join('')}`;
   }
   function wbHealth() {
     const J = WB().health || {}; const t = today();
@@ -990,7 +992,14 @@
       const btns = [...$app.querySelectorAll('.opt')]; const picked = new Set();
       const check = () => {
         const ok = q.c.length === picked.size && q.c.every((k) => picked.has(k));
-        btns.forEach((b) => { const k = Number(b.dataset.k); b.disabled = true; b.classList.remove('sel'); if (q.c.includes(k)) b.classList.add('right'); else if (picked.has(k)) b.classList.add('wrong'); });
+        btns.forEach((b) => {
+          const k = Number(b.dataset.k); b.disabled = true; b.classList.remove('sel');
+          const bx = b.querySelector('.box'); const mark = (m) => { if (bx) bx.textContent = m; else b.insertAdjacentHTML('afterbegin', m + ' '); };
+          if (q.c.includes(k) && picked.has(k)) { b.classList.add('right'); mark('✅'); }
+          else if (q.c.includes(k)) { b.classList.add('missed'); mark('✅'); b.insertAdjacentHTML('beforeend', ' <span class="small">(התשובה הנכונה)</span>'); }
+          else if (picked.has(k)) { b.classList.add('wrong'); mark('❌'); }
+          else b.classList.add('dim');
+        });
         if (ok) score++; else wrong.push(i + 1);
         const c = document.getElementById('qcheck'); if (c) c.remove();
         document.getElementById('fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><b>${ok ? '✅ נכון!' : '❌ לא בדיוק.'}</b> ${esc(q.x)}</div>
