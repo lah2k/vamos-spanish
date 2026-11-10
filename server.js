@@ -271,6 +271,16 @@ async function api(req, res, url) {
       return send(res, 200, await sendWhatsApp(t, body.template));
     }
   }
+  if (route === '/api/wa-status' && method === 'GET') {
+    // minimal health check (no secrets): is the WhatsApp token accepted by Meta?
+    if (!WA.token || !WA.phoneId) return send(res, 200, { configured: false });
+    try {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}?fields=display_phone_number,verified_name,quality_rating,code_verification_status`, { headers: { Authorization: `Bearer ${WA.token}` } });
+      const d = await r.json().catch(() => ({}));
+      return send(res, 200, r.ok ? { configured: true, tokenOk: true, number: d.display_phone_number, name: d.verified_name, quality: d.quality_rating, template: WA.template, lang: WA.lang, params: WA.params }
+        : { configured: true, tokenOk: false, error: d.error && { code: d.error.code, subcode: d.error.error_subcode, type: d.error.type, message: d.error.message } });
+    } catch (e) { return send(res, 200, { configured: true, tokenOk: false, error: String(e.message || e) }); }
+  }
   if (route === '/api/admin/reminders' && method === 'GET') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     return send(res, 200, { configured: !!(WA.token && WA.phoneId), time: WA.time, template: WA.template, now: tzNow(), sent: db.reminders.sent, log: db.reminders.log });
