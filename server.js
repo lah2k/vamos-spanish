@@ -349,6 +349,27 @@ async function api(req, res, url) {
       markActive(u, body.date); save();
       return send(res, 200, { user: publicUser(u) });
     }
+    if (route === '/api/wb/challenge' && method === 'POST') {
+      const c = w.challenge = w.challenge || { days: {} };
+      const t = (v, n) => String(v || '').trim().slice(0, n);
+      if (body.setup) {
+        const HAB = ['strengths', 'savor', 'grat', 'kind', 'social', 'move', 'sleep', 'medit'];
+        if (!HAB.includes(body.setup.habit)) return send(res, 400, { error: 'bad habit' });
+        c.habit = body.setup.habit;
+        c.woop = { w: t(body.setup.w, 200), o: t(body.setup.o, 200), ob: t(body.setup.ob, 200), p: t(body.setup.p, 200) };
+        c.told = t(body.setup.told, 100);
+        if (!c.start) c.start = DATE_RE.test(body.setup.start || '') ? body.setup.start : new Date().toISOString().slice(0, 10);
+      }
+      if (body.day) {
+        if (!DATE_RE.test(body.day.date || '')) return send(res, 400, { error: 'bad date' });
+        if (body.day.done) c.days[body.day.date] = true; else delete c.days[body.day.date];
+        markActive(u, body.day.date);
+      }
+      if (body.reflect) c.reflect = { why: t(body.reflect.why, 600), how: t(body.reflect.how, 600), exp: t(body.reflect.exp, 1000), at: new Date().toISOString() };
+      if (body.reset) w.challenge = { days: {} };
+      save();
+      return send(res, 200, { user: publicUser(u) });
+    }
     if (route === '/api/wb/kindlog' && method === 'POST') {
       if (!DATE_RE.test(body.date || '')) return send(res, 400, { error: 'bad date' });
       w.kindlog = w.kindlog || {};

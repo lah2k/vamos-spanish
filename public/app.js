@@ -646,7 +646,7 @@
     const p = (w.perma || []).slice(-1)[0];
     return `<h3 style="margin-top:14px">😊 המדע של האושר – ${Object.keys(w.read || {}).length} חלקים נקראו</h3>
       <p class="small" style="margin:0">${p ? `PERMA (${p.phase === 'pre' ? 'פתיחה' : 'סיום'}, ${fmtDate(p.date || p.at)}): רווחה כללית <b>${p.scores.overall.toFixed(1)}</b> · P ${p.scores.P.toFixed(1)} · E ${p.scores.E.toFixed(1)} · R ${p.scores.R.toFixed(1)} · M ${p.scores.M.toFixed(1)} · A ${p.scores.A.toFixed(1)}` : 'PERMA: עוד לא מולא'}
-      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.health ? ` · יומן תנועה ושינה ${Object.keys(w.health).length} ימים` : ''}${w.medit ? ` · מדיטציה ${Object.keys(w.medit).length} ימים` : ''}${w.letter && w.letter.done ? ` · מכתב תודה נמסר${w.letter.to ? ' ל' + esc(w.letter.to) : ''} 💌` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
+      ${w.strengths && w.strengths.length ? ` · חוזקות: ${w.strengths.map(esc).join(', ')} · שבוע חוזקות ${(w.strengthDays || []).length}/7` : ''}${w.journal ? ` · יומן הנאה ותודה ${Object.keys(w.journal).length}/7` : ''}${w.kindlog ? ` · יומן טוב לב ${Object.keys(w.kindlog).length}/7` : ''}${w.health ? ` · יומן תנועה ושינה ${Object.keys(w.health).length} ימים` : ''}${w.medit ? ` · מדיטציה ${Object.keys(w.medit).length} ימים` : ''}${w.challenge && w.challenge.habit ? ` · אתגר 4 שבועות: ${HABITS[w.challenge.habit]} ${Object.keys(w.challenge.days || {}).length}/28` : ''}${w.letter && w.letter.done ? ` · מכתב תודה נמסר${w.letter.to ? ' ל' + esc(w.letter.to) : ''} 💌` : ''}${w.quiz ? ' · בחנים: ' + Object.keys(w.quiz).map((m) => { const a = w.quiz[m].slice(-1)[0]; return `מודול ${m} ${a.score}/${a.total}`; }).join(', ') : ''}</p>`;
   }
 
   async function viewParent() {
@@ -767,6 +767,7 @@
       s.push({ key: 'perma', href: '#/wb/1/perma', title: 'שאלון PERMA – מדידת רווחה נפשית', icon: '📊', done: WB().perma.length > 0 });
       s.push({ key: 'via', href: '#/wb/1/via', title: 'שאלון VIA – 24 חוזקות האופי', icon: '💪', done: WB().strengths.length > 0 });
     }
+    if (CUR === 6) s.push({ key: 'challenge', href: '#/wb/6/challenge', title: 'האתגר שלי: 4 שבועות', icon: '🏆', done: !!(WB().challenge && WB().challenge.habit) });
     if (CUR === 5) s.push({ key: 'medit', href: '#/wb/5/medit', title: 'היומן שלי: מדיטציה ומכתב תודה', icon: '🧘', done: Object.keys(WB().medit || {}).length > 0 || !!(WB().letter && WB().letter.done) });
     if (CUR === 4) s.push({ key: 'health', href: '#/wb/4/health', title: 'היומן שלי: תנועה ושינה', icon: '🏃', done: Object.keys(WB().health || {}).length > 0 });
     if (CUR === 3) s.push({ key: 'kindlog', href: '#/wb/3/kindlog', title: 'היומן שלי: טוב לב וקשר חברתי', icon: '🤝', done: Object.keys(WB().kindlog || {}).length > 0 });
@@ -795,6 +796,7 @@
     if (sub === 'kindlog') return wbKindlog();
     if (sub === 'health') return wbHealth();
     if (sub === 'medit') return wbMedit();
+    if (sub === 'challenge') return wbChallenge();
     if (sub === 'review') return wbReview();
     if (sub === 'quiz') return wbQuiz();
     const steps = wbSteps(); const n = steps.filter((x) => x.done).length;
@@ -820,6 +822,7 @@
     const s = WBC.sections[i]; if (!s) return go('#/wb/' + CUR);
     let html = s.html.replace('@@FIG@@', WB_FIG);
     if (/^משימת/.test(s.title) && CUR === 1) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/1/perma">📊 למלא את שאלון PERMA כאן באתר</a><a class="btn alt" href="#/wb/1/via">💪 לבחור חוזקות</a></div>`;
+    if (/^משימת/.test(s.title) && CUR === 6) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/6/challenge">🏆 להתחיל את האתגר כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 5) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/5/medit">🧘 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 4) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/4/health">🏃 למלא את היומן כאן באתר</a></div>`;
     if (/^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
@@ -952,6 +955,54 @@
     document.getElementById('hsave').onclick = async () => {
       try { user = (await api('wb/health', { date, act: document.getElementById('hact').value, min: document.getElementById('hmin').value, sleep: document.getElementById('hsleep').value })).user; toast('✅ נשמר ביומן'); wbHealth(); }
       catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
+    };
+  }
+  const HABITS = { strengths: '⭐ חוזקות', savor: '🍓 התענגות', grat: '🙏 תודה', kind: '💛 טוב לב', social: '👫 קשרים', move: '🏃 תנועה', sleep: '😴 שינה', medit: '🧘 מדיטציה' };
+  function wbChallenge() {
+    const C = WB().challenge || { days: {} }; const W = C.woop || {}; const t = today();
+    const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const save = async (b, msg) => { try { user = (await api('wb/challenge', b)).user; toast(msg || '✅ נשמר'); wbChallenge(); } catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); } };
+    const v = (id) => document.getElementById(id).value;
+    const head = `<p class="small"><a href="#/wb/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>`;
+    const setup = `<div class="card"><h2>${C.habit ? '✏️ לעדכן את האתגר' : '1️⃣ בוחרים הרגל'}</h2>
+      <div class="row" style="flex-wrap:wrap;gap:8px">${Object.entries(HABITS).map(([k, n]) => `<label class="pill" style="cursor:pointer"><input type="radio" name="hab" value="${k}" ${C.habit === k ? 'checked' : ''}> ${n}</label>`).join('')}</div>
+      <h3 style="margin-top:16px">2️⃣ עושים WOOP (חמש דקות שקטות, בסדר הזה!)</h3>
+      <label class="small">🌟 משאלה – מטרה מדויקת (מה, איפה, מתי, כמה)</label><input id="cw" class="search" style="width:100%" value="${esc(W.w || '')}" placeholder="למשל: למדוט 10 דקות בחדר שלי לפני השינה, 5 ערבים בשבוע">
+      <label class="small">😊 תוצאה – מה הכי טוב שיקרה? (לדמיין חצי דקה)</label><input id="co" class="search" style="width:100%" value="${esc(W.o || '')}" placeholder="למשל: ארדם רגועה יותר">
+      <label class="small">🧱 מכשול – מה בתוכי עלול לעצור אותי?</label><input id="cob" class="search" style="width:100%" value="${esc(W.ob || '')}" placeholder="למשל: אני עייפה ושוכחת">
+      <label class="small">🗺️ תוכנית – אם [מכשול], אז [פעולה]</label><input id="cp" class="search" style="width:100%" value="${esc(W.p || '')}" placeholder="למשל: אם אני שוכחת, אז תזכורת בטלפון ב-21:00">
+      <label class="small">📣 למי סיפרתי על האתגר?</label><input id="ctold" class="search" style="width:100%" value="${esc(C.told || '')}" placeholder="למשל: אבא, חברה">
+      <div class="row" style="margin-top:12px"><button class="btn" id="csave">${C.habit ? '💾 שמירה' : '🚀 מתחילים!'}</button></div></div>`;
+    if (!C.habit) {
+      $app.innerHTML = head + `<div class="card"><h1>🏆 האתגר שלי: 4 שבועות</h1><p class="muted">בוחרים הרגל אחד מהקורס, מתכננים אותו בשיטת WOOP, ומסמנים כל יום במשך 28 ימים. בסוף ממלאים שוב את שאלון PERMA ורואים מה השתנה.</p></div>` + setup + wbNav('challenge');
+    } else {
+      const days = Array.from({ length: 28 }, (_, i) => shift(C.start, i));
+      const done = days.filter((d) => C.days[d]).length; const ended = shift(C.start, 27) <= t;
+      const dayNo = Math.min(28, Math.max(1, Math.round((new Date(t + 'T12:00:00') - new Date(C.start + 'T12:00:00')) / 864e5) + 1));
+      const R = C.reflect || {};
+      $app.innerHTML = head + `<div class="card"><h1>🏆 האתגר שלי: ${HABITS[C.habit]}</h1>
+        <p><b>🌟</b> ${esc(W.w || '')}<br><b>😊</b> ${esc(W.o || '')}<br><b>🧱</b> ${esc(W.ob || '')}<br><b>🗺️</b> ${esc(W.p || '')}</p>
+        <p class="small muted">התחלתי ב-${fmtDate(C.start)} · יום ${dayNo} מתוך 28 · ${done} ימים סומנו</p>
+        <div class="row" style="margin-top:8px"><button class="btn big" id="ctoday" ${C.days[t] ? 'disabled' : ''}>${C.days[t] ? '✅ היום סומן!' : '✅ עשיתי את זה היום'}</button></div></div>
+        <div class="card"><h2>📅 28 הימים</h2><p class="small muted">לוחצים על יום כדי לסמן או לבטל.</p>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">${days.map((d, i) => `<button class="btn ${C.days[d] ? '' : 'ghost'}" data-cd="${d}" ${d > t ? 'disabled' : ''} style="padding:8px 0">${C.days[d] ? '✅' : i + 1}</button>`).join('')}</div></div>
+        <div class="card"><h2>📝 בסוף 4 השבועות</h2>${ended ? '' : '<p class="small muted">אפשר למלא כבר עכשיו ולעדכן בסוף.</p>'}
+          <p><a class="btn alt" href="#/wb/1/perma">📊 למלא שוב את שאלון PERMA</a></p>
+          <label class="small">למה בחרתי בהרגל הזה?</label><textarea id="rwhy" class="search" style="width:100%;min-height:60px">${esc(R.why || '')}</textarea>
+          <label class="small">מה עזר לי? (WOOP, תזכורות, אנשים)</label><textarea id="rhow" class="search" style="width:100%;min-height:60px">${esc(R.how || '')}</textarea>
+          <label class="small">איך הייתה החוויה? האם משהו השתנה?</label><textarea id="rexp" class="search" style="width:100%;min-height:80px">${esc(R.exp || '')}</textarea>
+          <div class="row" style="margin-top:10px"><button class="btn" id="rsave">💾 שמירה</button></div></div>
+        <details class="card"><summary>✏️ לעדכן את ה-WOOP או להתחיל מחדש</summary>${setup}<button class="btn ghost" id="creset">🔄 להתחיל אתגר חדש</button></details>
+        ${wbNav('challenge')}`;
+      document.getElementById('ctoday').onclick = () => save({ day: { date: t, done: true } }, '🎉 כל הכבוד!');
+      document.querySelectorAll('[data-cd]').forEach((b) => { b.onclick = () => save({ day: { date: b.dataset.cd, done: !C.days[b.dataset.cd] } }); });
+      document.getElementById('rsave').onclick = () => save({ reflect: { why: v('rwhy'), how: v('rhow'), exp: v('rexp') } });
+      document.getElementById('creset').onclick = () => { if (confirm('להתחיל אתגר חדש? הסימונים הקיימים יימחקו.')) save({ reset: true }); };
+    }
+    document.getElementById('csave').onclick = () => {
+      const h = document.querySelector('input[name=hab]:checked'); if (!h) return toast('בחרו הרגל');
+      if (!v('cw').trim()) return toast('כתבו משאלה מדויקת');
+      save({ setup: { habit: h.value, w: v('cw'), o: v('co'), ob: v('cob'), p: v('cp'), told: v('ctold'), start: t } }, C.habit ? '✅ נשמר' : '🚀 האתגר התחיל!');
     };
   }
   function wbMedit() {
