@@ -223,6 +223,8 @@ main { flex: 1; width: 100%; max-width: 1120px; margin: 0 auto; padding: 18px 16
 .wbtext th, .wbtext td { border: 1px solid var(--line); padding: 8px 10px; text-align: right; vertical-align: top; }
 .wbtext th { background: var(--yellow-l); }
 .wbfig { margin: 1em 0; text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.wbfig svg { width: 100%; height: auto; max-width: 760px; }
+.wbfig figcaption { font-size: .85rem; color: var(--muted); margin-top: 6px; }
 .wbsteps { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .wbsteps .lcard { margin: 0; padding: 12px; }
 .wbsteps .lcard .em { width: 44px; height: 44px; font-size: 1.5rem; }
