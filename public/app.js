@@ -681,12 +681,12 @@
     try { rem = await fetch('/api/admin/reminders', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); } catch (e) { rem = null; }
     const adminPost = (path, body) => fetch('/api/admin/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin }, body: JSON.stringify(body) }).then((r) => r.json());
     const today = rem && rem.now ? rem.now.date : '';
-    let pws = {}; try { pws = (await fetch('/api/admin/course-passwords', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json())).courses || {}; } catch (e) {}
-    const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : c === 'wb' ? '⛔ סגור (עוד לא הוגדרה סיסמה)' : '🔓 פתוח לכולם'}</td>
+    let pws = {}, opens = {}; try { const j = await fetch('/api/admin/course-passwords', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); pws = j.courses || {}; opens = j.open || {}; } catch (e) {}
+    const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : c === 'wb' && !opens[c] ? '⛔ סגור' : '🔓 פתוח לכולם'}</td>
       <td><input class="search" style="width:170px;margin:0" type="text" autocomplete="off" data-cpwin="${c}" placeholder="${pws[c] ? 'סיסמה חדשה' : 'סיסמה'}"></td>
-      <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''}</td></tr>`;
+      <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''} ${c === 'wb' && !pws[c] && !opens[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">פתיחה לכולם</button>` : ''} ${c === 'wb' && (pws[c] || opens[c]) ? `<button class="linkbtn" data-cpw="${c}" data-close="1">סגירת הקורס</button>` : ''}</td></tr>`;
     const pwCard = `<div class="card"><h2>🔑 סיסמאות לקורסים</h2>
-      <p class="small muted" style="margin-top:0">מי שמכיר/ה את הסיסמה פותח/ת את הקורס פעם אחת, והוא נשאר פתוח בחשבון שלו/ה. "המדע של האושר" סגור עד שמגדירים לו סיסמה (מי שכבר אושר/ה קודם נשאר/ה עם גישה).</p>
+      <p class="small muted" style="margin-top:0">מי שמכיר/ה את הסיסמה פותח/ת את הקורס פעם אחת, והוא נשאר פתוח בחשבון שלו/ה. "המדע של האושר" אפשר לסגור, לפתוח לכולם (הסרת סיסמה) או להגן בסיסמה. גישה של חשבון מסוים אפשר להסיר בכרטיס שלו למטה.</p>
       <table class="tbl">${pwRow('wb', '😊 המדע של האושר')}${pwRow('es', '🇪🇸 ספרדית')}${pwRow('fr', '🇫🇷 צרפתית')}</table></div>`;
     const statusHe = (st) => !st ? 'עוד לא נבדק היום' : st === 'sent' ? '✅ נשלחה תזכורת' : st === 'done-already' ? '🌟 השיעור כבר נעשה – לא נשלחה תזכורת' : st === 'checking' ? 'בבדיקה…' : '⚠️ ' + st;
     const remCard = rem ? `<div class="card"><h2>📱 תזכורות וואטסאפ</h2>
@@ -705,13 +705,18 @@
           ${u.phone ? `<button class="btn alt" data-test="${esc(u.email)}">שליחת תזכורת לבדיקה</button>` : ''}
           <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
         </div>
+        <p class="small">😊 המדע של האושר: ${(u.unlocked || {}).wb ? `✅ יש גישה <button class="linkbtn" data-acc="${esc(u.email)}" data-on="0">הסרת גישה</button>` : `אין גישה אישית <button class="linkbtn" data-acc="${esc(u.email)}" data-on="1">מתן גישה</button>`}</p>
         ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}${wbParent(u)}</div>`).join('')}`;
+    $app.querySelectorAll('[data-acc]').forEach((b) => b.onclick = async () => {
+      const r = await adminPost('course-access', { email: b.dataset.acc, course: 'wb', on: b.dataset.on === '1' });
+      toast(r.ok ? '✅ עודכן' : 'שגיאה'); viewParent();
+    });
     $app.querySelectorAll('[data-cpw]').forEach((b) => b.onclick = async () => {
       const c = b.dataset.cpw, inp = $app.querySelector(`[data-cpwin="${c}"]`);
-      const clear = b.dataset.clear === '1';
-      if (!clear && !inp.value.trim()) return toast('נא להקליד סיסמה');
-      const r = await adminPost('course-password', { course: c, password: clear ? '' : inp.value });
-      toast(r.ok ? (r.set ? '✅ הסיסמה נשמרה' : 'הסיסמה הוסרה') : 'שגיאה בשמירה'); viewParent();
+      const clear = b.dataset.clear === '1', close = b.dataset.close === '1';
+      if (!clear && !close && !inp.value.trim()) return toast('נא להקליד סיסמה');
+      const r = await adminPost('course-password', close ? { course: c, close: true } : { course: c, password: clear ? '' : inp.value });
+      toast(!r.ok ? 'שגיאה בשמירה' : r.closed ? '⛔ הקורס נסגר' : r.set ? '✅ הסיסמה נשמרה' : '🔓 הקורס פתוח לכולם'); viewParent();
     });
     document.getElementById('out').onclick = () => { sessionStorage.removeItem('vamos_pin'); go(user ? '#/home' : '#/'); };
     $app.querySelectorAll('[data-save]').forEach((b) => b.onclick = async () => {

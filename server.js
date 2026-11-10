@@ -75,7 +75,9 @@ function permaScores(ans) {
 const ALL_COURSES = ['es', 'fr', 'wb'];
 const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const coursePw = (c) => (db.settings.coursePw || {})[c] || null;
-const courseLocked = (u, c) => !((u.unlocked || {})[c]) && (c === 'wb' || !!coursePw(c));
+const courseOpen = (c) => !!((db.settings.courseOpen || {})[c]);
+// wb is closed by default; removing its password in the parent area opens it to everyone (courseOpen), until closed again.
+const courseLocked = (u, c) => { if ((u.unlocked || {})[c]) return false; if (coursePw(c)) return true; return c === 'wb' && !courseOpen(c); };
 const lockMap = (u) => Object.fromEntries(ALL_COURSES.map((c) => [c, courseLocked(u, c) ? (coursePw(c) ? 'password' : 'closed') : 'open']));
 const unlockTries = {};
 const wbOf = (u) => (u.wb = u.wb || { read: {}, perma: [], strengths: [], strengthDays: [] });
@@ -88,6 +90,8 @@ if (!db.reminders) db.reminders = { sent: {}, log: [] };
 if (!db.settings) db.settings = {};
 // migrate: accounts approved for the well-being course before passwords existed stay unlocked
 for (const u of Object.values(db.users)) if (u.wbAccess) { u.unlocked = u.unlocked || {}; u.unlocked.wb = true; delete u.wbAccess; }
+// one-off (parent's request, Nov 2026): only the parent's account keeps well-being access
+if (!db.settings.migWbParentOnly) { for (const u of Object.values(db.users)) if (u.email !== 'lahav2000@gmail.com' && u.unlocked) delete u.unlocked.wb; db.settings.migWbParentOnly = true; }
 
 let saveTimer = null;
 function save() {
@@ -218,15 +222,25 @@ async function api(req, res, url) {
 
   if (route === '/api/admin/course-passwords' && method === 'GET') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
-    return send(res, 200, { courses: Object.fromEntries(ALL_COURSES.map((c) => [c, !!coursePw(c)])) });
+    return send(res, 200, { courses: Object.fromEntries(ALL_COURSES.map((c) => [c, !!coursePw(c)])), open: Object.fromEntries(ALL_COURSES.map((c) => [c, courseOpen(c)])) });
+  }
+  if (route === '/api/admin/course-access' && method === 'POST') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    const t = db.users[normEmail(body.email)];
+    if (!t || !ALL_COURSES.includes(body.course)) return send(res, 400, { error: 'bad request' });
+    t.unlocked = t.unlocked || {};
+    if (body.on) t.unlocked[body.course] = true; else delete t.unlocked[body.course];
+    save(); return send(res, 200, { ok: true });
   }
   if (route === '/api/admin/course-password' && method === 'POST') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     if (!ALL_COURSES.includes(body.course)) return send(res, 400, { error: 'bad course' });
     db.settings.coursePw = db.settings.coursePw || {};
     const pw = String(body.password || '').trim();
-    if (!pw) delete db.settings.coursePw[body.course];
-    else { const salt = crypto.randomBytes(16).toString('hex'); db.settings.coursePw[body.course] = { salt, hash: pwHash(pw, salt) }; }
+    db.settings.courseOpen = db.settings.courseOpen || {};
+    if (body.close) { delete db.settings.coursePw[body.course]; delete db.settings.courseOpen[body.course]; save(); return send(res, 200, { ok: true, set: false, closed: true }); }
+    if (!pw) { delete db.settings.coursePw[body.course]; db.settings.courseOpen[body.course] = true; }
+    else { const salt = crypto.randomBytes(16).toString('hex'); db.settings.coursePw[body.course] = { salt, hash: pwHash(pw, salt) }; delete db.settings.courseOpen[body.course]; }
     save();
     return send(res, 200, { ok: true, set: !!pw });
   }
