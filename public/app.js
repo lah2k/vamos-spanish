@@ -759,7 +759,7 @@
     WBC = WBM[m];
     return WBC;
   }
-  const cleanTitle = (t) => String(t).replace(/\s*\(\d+\s*(?:דק׳|דקות|דק')\)\s*$/, '');
+  const cleanTitle = (t) => String(t).replace(/\s*\((?:כ-?\s*)?\d+\s*(?:דק׳|דקות|דק')[^)]*\)\s*$/, '');
   const readMin = (html) => { const w = String(html || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').split(/\s+/).filter(Boolean).length; return Math.max(1, Math.round(w / 120)); };
   function wbSteps() {
     const s = WBC.sections.map((x, i) => ({ key: 's' + i, href: `#/wb/${CUR}/s/` + i, title: cleanTitle(x.title), min: readMin(x.html), sid: x.id, icon: /^סרטון/.test(x.title) ? '🎬' : /^קריאה/.test(x.title) ? '📖' : /^משימת/.test(x.title) ? '✅' : 'ℹ️' }));
@@ -957,7 +957,7 @@
       catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); }
     };
   }
-  const HABITS = { strengths: '⭐ חוזקות', savor: '🍓 התענגות', grat: '🙏 תודה', kind: '💛 טוב לב', social: '👫 קשרים', move: '🏃 תנועה', sleep: '😴 שינה', medit: '🧘 מדיטציה' };
+  const HABITS = { strengths: '⭐ חוזקות', savor: '🍓 הנאה מודעת', grat: '🙏 הכרת תודה', kind: '💛 טוב לב', social: '👫 קשרים', move: '🏃 תנועה', sleep: '😴 שינה', medit: '🧘 מדיטציה' };
   function wbChallenge() {
     const C = WB().challenge || { days: {} }; const W = C.woop || {}; const t = today();
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
