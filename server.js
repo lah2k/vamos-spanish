@@ -224,6 +224,12 @@ async function api(req, res, url) {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     return send(res, 200, { courses: Object.fromEntries(ALL_COURSES.map((c) => [c, !!coursePw(c)])), open: Object.fromEntries(ALL_COURSES.map((c) => [c, courseOpen(c)])) });
   }
+  if (route === '/api/admin/delete-user' && method === 'POST') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    const em = normEmail(body.email);
+    if (!db.users[em]) return send(res, 404, { error: 'not found' });
+    delete db.users[em]; save(); return send(res, 200, { ok: true });
+  }
   if (route === '/api/admin/course-access' && method === 'POST') {
     if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
     const t = db.users[normEmail(body.email)];

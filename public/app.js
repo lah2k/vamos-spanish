@@ -703,10 +703,16 @@
           <label class="small"><input type="checkbox" data-off="${esc(u.email)}" ${u.remindersOff ? 'checked' : ''}> השהיית תזכורות</label>
           <button class="btn ghost" data-save="${esc(u.email)}">שמירה</button>
           ${u.phone ? `<button class="btn alt" data-test="${esc(u.email)}">שליחת תזכורת לבדיקה</button>` : ''}
+          <button class="linkbtn" style="color:#c0392b" data-del="${esc(u.email)}" data-name="${esc(u.name || u.email)}">🗑️ מחיקת משתמש</button>
           <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
         </div>
         <p class="small">😊 המדע של האושר: ${(u.unlocked || {}).wb ? `✅ יש גישה <button class="linkbtn" data-acc="${esc(u.email)}" data-on="0">הסרת גישה</button>` : `אין גישה אישית <button class="linkbtn" data-acc="${esc(u.email)}" data-on="1">מתן גישה</button>`}</p>
         ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}${wbParent(u)}</div>`).join('')}`;
+    $app.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => {
+      if (!confirm(`למחוק את ${b.dataset.name}? כל ההתקדמות של החשבון תימחק ואי אפשר לשחזר.`)) return;
+      const r = await adminPost('delete-user', { email: b.dataset.del });
+      toast(r.ok ? '🗑️ המשתמש נמחק' : 'שגיאה במחיקה'); viewParent();
+    });
     $app.querySelectorAll('[data-acc]').forEach((b) => b.onclick = async () => {
       const r = await adminPost('course-access', { email: b.dataset.acc, course: 'wb', on: b.dataset.on === '1' });
       toast(r.ok ? '✅ עודכן' : 'שגיאה'); viewParent();
