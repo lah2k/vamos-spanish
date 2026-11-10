@@ -933,6 +933,7 @@
     const next = mods.map((x) => ({ x, st: x.steps.find((y) => !y.done) })).find((y) => y.st);
     $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">😊 המדע של האושר</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
       <p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
+      <ul class="small" style="margin:8px 0 0;padding-right:20px"><li>הקורס הפופולרי ביותר ב-300 שנות אוניברסיטת ייל בארה"ב – כמעט רבע מהסטודנטים לתואר ראשון נרשמו אליו מאז 2018.</li><li>הקורס הפופולרי ביותר בפלטפורמת <a href="https://www.coursera.org/learn/the-science-of-well-being" target="_blank" rel="noopener">Coursera</a>, עם יותר מ-5 מיליון נרשמים.</li></ul>
       <div style="margin-top:14px" class="bar"><i style="width:${n / all.length * 100}%"></i></div>
       <p class="small muted">${n} מתוך ${all.length} חלקים הושלמו · ${WBMODS.length} מודולים</p>
       <div class="row">${next ? `<a class="btn big" href="${next.st.href}">${next.st.icon} ${n ? 'להמשיך' : 'להתחיל'}: מודול ${next.x.m.module} – ${next.st.title}</a>` : '<span class="pill ok">🎉 סיימתם את כל המודולים שכאן!</span>'}</div></div>
