@@ -277,7 +277,20 @@ async function api(req, res, url) {
     try {
       const r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}?fields=display_phone_number,verified_name,quality_rating,code_verification_status`, { headers: { Authorization: `Bearer ${WA.token}` } });
       const d = await r.json().catch(() => ({}));
-      return send(res, 200, r.ok ? { configured: true, tokenOk: true, number: d.display_phone_number, name: d.verified_name, quality: d.quality_rating, template: WA.template, lang: WA.lang, params: WA.params }
+      let templates = null;
+      const biz = String(url.searchParams.get('biz') || '').replace(/\D/g, '');
+      if (r.ok && biz) {
+        try {
+          const w = await fetch(`https://graph.facebook.com/v21.0/${biz}/owned_whatsapp_business_accounts?fields=id,name`, { headers: { Authorization: `Bearer ${WA.token}` } }).then((x) => x.json());
+          templates = [];
+          for (const a of (w.data || [])) {
+            const t = await fetch(`https://graph.facebook.com/v21.0/${a.id}/message_templates?fields=name,language,status,category,components&limit=50`, { headers: { Authorization: `Bearer ${WA.token}` } }).then((x) => x.json());
+            templates.push({ waba: a.id, wabaName: a.name, error: t.error && t.error.message, list: (t.data || []).map((x) => ({ name: x.name, language: x.language, status: x.status, category: x.category, body: ((x.components || []).find((c) => c.type === 'BODY') || {}).text })) });
+          }
+          if (w.error) templates = { error: w.error.message };
+        } catch (e) { templates = { error: String(e.message || e) }; }
+      }
+      return send(res, 200, r.ok ? { configured: true, tokenOk: true, templates, number: d.display_phone_number, name: d.verified_name, quality: d.quality_rating, template: WA.template, lang: WA.lang, params: WA.params }
         : { configured: true, tokenOk: false, error: d.error && { code: d.error.code, subcode: d.error.error_subcode, type: d.error.type, message: d.error.message } });
     } catch (e) { return send(res, 200, { configured: true, tokenOk: false, error: String(e.message || e) }); }
   }
