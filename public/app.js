@@ -694,10 +694,10 @@
       ${rem.log && rem.log.length ? `<details><summary>יומן שליחות אחרונות (${rem.log.length})</summary><table class="tbl">${rem.log.slice(0, 15).map((l) => `<tr><td>${fmtDate(l.at)} ${new Date(l.at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td><td dir="ltr" style="text-align:right">${esc(l.email)}</td><td>${l.ok ? '✅ נשלח' : '❌ ' + esc(l.error || '')}</td></tr>`).join('')}</table></details>` : ''}</div>` : '';
     $app.innerHTML = `<div class="row between"><h1>👨‍👩‍👧 אזור הורים</h1><button class="btn ghost" id="out">יציאה מאזור ההורים</button></div>
       <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>🇪🇸 ספרדית</th><th>🇫🇷 צרפתית</th><th>טעויות פתוחות</th><th>פעילות אחרונה</th></tr>
-      ${users.map((u) => { const a = summary(u, 'es'), b = summary(u, 'fr'); return `<tr><td><b>${esc(u.name || '—')}</b></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${a.ids.length}/30 · ${a.avg == null ? '–' : a.avg}</td><td>${dataOf(u, 'fr') ? `${b.ids.length}/30 · ${b.avg == null ? '–' : b.avg}` : '–'}</td><td>${a.mist + b.mist}</td><td>${a.last ? fmtDate(a.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6">אין עדיין משתמשים</td></tr>'}
+      ${users.map((u, ui) => { const a = summary(u, 'es'), b = summary(u, 'fr'); return `<tr data-goto="${ui}" style="cursor:pointer" title="לחצו לעריכה"><td><b>${esc(u.name || '—')}</b> <span class="small">✏️</span></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${a.ids.length}/30 · ${a.avg == null ? '–' : a.avg}</td><td>${dataOf(u, 'fr') ? `${b.ids.length}/30 · ${b.avg == null ? '–' : b.avg}` : '–'}</td><td>${a.mist + b.mist}</td><td>${a.last ? fmtDate(a.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6">אין עדיין משתמשים</td></tr>'}
       </table></div>
       ${remCard}${pwCard}
-      ${users.map((u) => `<div class="card"><h2>${esc(u.name || u.email)}</h2>
+      ${users.map((u, ui) => `<div class="card" id="pu-${ui}"><div class="row between"><h2 style="margin:0">${esc(u.name || u.email)}</h2><a class="linkbtn small" href="javascript:void 0" data-top="1">↑ לרשימה</a></div>
         <div class="row" style="margin-bottom:12px">
           <label class="small">📱 טלפון לתזכורות: <input class="search" style="width:190px;margin:0;direction:ltr" data-ph="${esc(u.email)}" value="${esc(u.phone || '')}" placeholder="05X-XXXXXXX"></label>
           <label class="small"><input type="checkbox" data-off="${esc(u.email)}" ${u.remindersOff ? 'checked' : ''}> השהיית תזכורות</label>
@@ -708,6 +708,8 @@
         </div>
         <p class="small">😊 המדע של האושר: ${(u.unlocked || {}).wb ? `✅ יש גישה <button class="linkbtn" data-acc="${esc(u.email)}" data-on="0">הסרת גישה</button>` : `אין גישה אישית <button class="linkbtn" data-acc="${esc(u.email)}" data-on="1">מתן גישה</button>`}</p>
         ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}${wbParent(u)}</div>`).join('')}`;
+    $app.querySelectorAll('[data-goto]').forEach((r) => r.onclick = () => { const el = document.getElementById('pu-' + r.dataset.goto); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.style.outline = '3px solid var(--teal)'; setTimeout(() => { el.style.outline = ''; }, 1600); });
+    $app.querySelectorAll('[data-top]').forEach((b) => b.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' }));
     $app.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => {
       if (!confirm(`למחוק את ${b.dataset.name}? כל ההתקדמות של החשבון תימחק ואי אפשר לשחזר.`)) return;
       const r = await adminPost('delete-user', { email: b.dataset.del });

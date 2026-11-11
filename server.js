@@ -281,7 +281,12 @@ async function api(req, res, url) {
       const biz = String(url.searchParams.get('biz') || '').replace(/\D/g, '');
       if (r.ok && biz) {
         try {
-          const w = await fetch(`https://graph.facebook.com/v21.0/${biz}/owned_whatsapp_business_accounts?fields=id,name`, { headers: { Authorization: `Bearer ${WA.token}` } }).then((x) => x.json());
+          let w = await fetch(`https://graph.facebook.com/v21.0/${biz}/owned_whatsapp_business_accounts?fields=id,name`, { headers: { Authorization: `Bearer ${WA.token}` } }).then((x) => x.json());
+          if (w.error) { // fall back: WABA ids the token was granted (granular scopes)
+            const dbg = await fetch(`https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(WA.token)}&access_token=${encodeURIComponent(WA.token)}`).then((x) => x.json());
+            const ids = [...new Set(((dbg.data && dbg.data.granular_scopes) || []).filter((g) => /whatsapp/.test(g.scope)).flatMap((g) => g.target_ids || []))];
+            w = { data: ids.map((id) => ({ id })) };
+          }
           templates = [];
           for (const a of (w.data || [])) {
             const t = await fetch(`https://graph.facebook.com/v21.0/${a.id}/message_templates?fields=name,language,status,category,components&limit=50`, { headers: { Authorization: `Bearer ${WA.token}` } }).then((x) => x.json());
