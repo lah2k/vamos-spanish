@@ -40,21 +40,24 @@ function allFinished(u) {
 // ---------- Well-Being course (private, parent-approved accounts only) ----------
 // The Hebrew translation is kept encrypted in the repo; the key lives only in the server DB (db.settings.wbKey).
 const wbCache = {};
-function wbContent(m) {
+// course 'wb' -> content-private/wbN.enc ; course 'teen' -> content-private/teenN.enc (same key)
+function courseContent(course, m) {
   m = String(Number(m) || 1);
-  if (wbCache[m]) return wbCache[m];
+  const ck = course + m;
+  if (wbCache[ck]) return wbCache[ck];
   const key = db.settings && db.settings.wbKey;
-  const file = path.join(__dirname, 'content-private', `wb${m}.enc`);
+  const file = path.join(__dirname, 'content-private', `${course}${m}.enc`);
   if (!key || !fs.existsSync(file)) return null;
   try {
     const raw = Buffer.from(fs.readFileSync(file, 'utf8'), 'base64');
     const d = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), raw.subarray(0, 12));
     d.setAuthTag(raw.subarray(12, 28));
-    wbCache[m] = JSON.parse(Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8'));
-    return wbCache[m];
-  } catch (e) { console.error('wb decrypt', e.message); return null; }
+    wbCache[ck] = JSON.parse(Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString('utf8'));
+    return wbCache[ck];
+  } catch (e) { console.error(course + ' decrypt', e.message); return null; }
 }
-const wbModules = () => fs.readdirSync(path.join(__dirname, 'content-private')).map((f) => (f.match(/^wb(\d+)\.enc$/) || [])[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+const wbContent = (m) => courseContent('wb', m);
+const courseModules = (course) => fs.readdirSync(path.join(__dirname, 'content-private')).map((f) => (f.match(new RegExp('^' + course + '(\\d+)\\.enc$')) || [])[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
 // PERMA-Profiler (Butler & Kern, 2016) scoring, item numbers 1..23
 const PERMA_SCALES = {
   P: [3, 13, 22], E: [2, 10, 17], R: [8, 19, 21], M: [7, 9, 20], A: [1, 5, 15],
@@ -72,15 +75,17 @@ function permaScores(ans) {
 // ---------- course passwords ----------
 // A course with a password stays locked until the user types it once (u.unlocked[course] = true).
 // The well-being course ('wb') is locked until a password is set (or the user was approved earlier).
-const ALL_COURSES = ['es', 'fr', 'wb'];
+const ALL_COURSES = ['es', 'fr', 'wb', 'teen'];
+const CLOSED_BY_DEFAULT = ['wb', 'teen'];
 const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const coursePw = (c) => (db.settings.coursePw || {})[c] || null;
 const courseOpen = (c) => !!((db.settings.courseOpen || {})[c]);
 // wb is closed by default; removing its password in the parent area opens it to everyone (courseOpen), until closed again.
-const courseLocked = (u, c) => { if ((u.unlocked || {})[c]) return false; if (coursePw(c)) return true; return c === 'wb' && !courseOpen(c); };
+const courseLocked = (u, c) => { if ((u.unlocked || {})[c]) return false; if (coursePw(c)) return true; return CLOSED_BY_DEFAULT.includes(c) && !courseOpen(c); };
 const lockMap = (u) => Object.fromEntries(ALL_COURSES.map((c) => [c, courseLocked(u, c) ? (coursePw(c) ? 'password' : 'closed') : 'open']));
 const unlockTries = {};
 const wbOf = (u) => (u.wb = u.wb || { read: {}, perma: [], strengths: [], strengthDays: [] });
+const teenOf = (u) => (u.teen = u.teen || { read: {}, quiz: {} });
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let db = { users: {} };
@@ -91,6 +96,7 @@ if (!db.settings) db.settings = {};
 // migrate: accounts approved for the well-being course before passwords existed stay unlocked
 for (const u of Object.values(db.users)) if (u.wbAccess) { u.unlocked = u.unlocked || {}; u.unlocked.wb = true; delete u.wbAccess; }
 // one-off (parent's request, Nov 2026): only the parent's account keeps well-being access
+if (!db.settings.migTeenParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.teen = true; } db.settings.migTeenParent = true; }
 if (!db.settings.migWbParentOnly) { for (const u of Object.values(db.users)) if (u.email !== 'lahav2000@gmail.com' && u.unlocked) delete u.unlocked.wb; db.settings.migWbParentOnly = true; }
 
 let saveTimer = null;
@@ -364,11 +370,50 @@ async function api(req, res, url) {
     return send(res, 200, { user: publicUser(u) });
   }
 
+  if (route.startsWith('/api/teen/')) {
+    if (courseLocked(u, 'teen')) return send(res, 403, { error: 'locked' });
+    const w = teenOf(u);
+    if (route === '/api/teen/modules' && method === 'GET') {
+      return send(res, 200, { modules: courseModules('teen').map((m) => { const c = courseContent('teen', m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
+    }
+    if (route === '/api/teen/content' && method === 'GET') {
+      const c = courseContent('teen', url.searchParams.get('m') || 1);
+      return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
+    }
+    if (route === '/api/teen/read' && method === 'POST') {
+      const sid = String(body.sid || '').slice(0, 40);
+      if (!sid) return send(res, 400, { error: 'bad section' });
+      if (!w.read[sid]) w.read[sid] = DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    if (route === '/api/teen/quiz' && method === 'POST') {
+      const m = String(Number(body.m) || 0), score = Number(body.score), total = Number(body.total);
+      if (!courseContent('teen', m) || !(total > 0 && score >= 0 && score <= total)) return send(res, 400, { error: 'bad quiz' });
+      w.quiz = w.quiz || {}; (w.quiz[m] = w.quiz[m] || []).push({ at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null, score, total, wrong: (Array.isArray(body.wrong) ? body.wrong : []).map(Number).slice(0, 50) });
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    if (route === '/api/teen/self' && method === 'POST') {
+      // "know yourself" questionnaire: life satisfaction (5 x 1-7), feelings (8 x 1-5), top strengths
+      const a = (Array.isArray(body.life) ? body.life : []).map(Number), f = (Array.isArray(body.feel) ? body.feel : []).map(Number);
+      if (a.length !== 5 || a.some((v) => !(Number.isInteger(v) && v >= 1 && v <= 7))) return send(res, 400, { error: 'bad life answers' });
+      if (f.length !== 8 || f.some((v) => !(Number.isInteger(v) && v >= 1 && v <= 5))) return send(res, 400, { error: 'bad feeling answers' });
+      const top = (Array.isArray(body.top) ? body.top : []).map((x) => String(x).slice(0, 40)).slice(0, 5);
+      w.self = w.self || [];
+      w.self.push({ at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null, life: a, feel: f, top,
+        lifeSum: a.reduce((x, y) => x + y, 0), balance: f.slice(0, 4).reduce((x, y) => x + y, 0) - f.slice(4).reduce((x, y) => x + y, 0) });
+      markActive(u, body.date); save();
+      return send(res, 200, { user: publicUser(u) });
+    }
+    return send(res, 404, { error: 'not found' });
+  }
+
   if (route.startsWith('/api/wb/')) {
     if (courseLocked(u, 'wb')) return send(res, 403, { error: 'locked' });
     const w = wbOf(u);
     if (route === '/api/wb/modules' && method === 'GET') {
-      return send(res, 200, { modules: wbModules().map((m) => { const c = wbContent(m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
+      return send(res, 200, { modules: courseModules('wb').map((m) => { const c = wbContent(m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
     }
     if (route === '/api/wb/content' && method === 'GET') {
       const c = wbContent(url.searchParams.get('m') || 1);
