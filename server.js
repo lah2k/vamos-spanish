@@ -509,12 +509,22 @@ async function sendWhatsApp(u, template) {
     ? { name: 'hello_world', language: { code: 'en_US' } }
     : { name: tpl, language: { code: WA.lang }, components: WA.params.length ? [{ type: 'body', parameters: WA.params.map((k) => ({ type: 'text', text: values[k] || '' })) }] : [] };
   try {
-    const r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}/messages`, {
+    let r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${WA.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messaging_product: 'whatsapp', to: u.phone, type: 'template', template: body }),
     });
-    const data = await r.json().catch(() => ({}));
+    let data = await r.json().catch(() => ({}));
+    if (!r.ok && data.error && data.error.code === 132000 && body.components && body.components.length) {
+      // the approved template has no {{1}} variable: send it again without parameters
+      delete body.components;
+      r = await fetch(`https://graph.facebook.com/v21.0/${WA.phoneId}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${WA.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: u.phone, type: 'template', template: body }),
+      });
+      data = await r.json().catch(() => ({}));
+    }
     const res = r.ok ? { ok: true, id: data.messages && data.messages[0] && data.messages[0].id } : { ok: false, error: (data.error && data.error.message) || `HTTP ${r.status}` };
     logReminder({ email: u.email, template: tpl, ok: res.ok, error: res.error || null });
     return res;
