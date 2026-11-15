@@ -75,6 +75,10 @@ function permaScores(ans) {
 // ---------- course passwords ----------
 // A course with a password stays locked until the user types it once (u.unlocked[course] = true).
 // The well-being course ('wb') is locked until a password is set (or the user was approved earlier).
+const IMG_DIR = path.join(DATA_DIR, 'images');
+const IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const IMG_SLOTS = { 'teen-dress': 'המדע של האושר לבני נוער · מודול 1 · סרטון 6: "השמלה"' };
+const imgFile = (name) => { if (!IMG_SLOTS[name]) return null; for (const e of Object.values(IMG_TYPES)) { const f = path.join(IMG_DIR, name + '.' + e); if (fs.existsSync(f)) return f; } return null; };
 const ALL_COURSES = ['es', 'fr', 'wb', 'teen'];
 const CLOSED_BY_DEFAULT = ['wb', 'teen'];
 const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
@@ -138,10 +142,10 @@ function send(res, code, obj) {
   res.end(body);
 }
 
-function readBody(req) {
+function readBody(req, max = 1e6) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1e6) { reject(new Error('too big')); req.destroy(); } });
+    req.on('data', (c) => { data += c; if (data.length > max) { reject(new Error('too big')); req.destroy(); } });
     req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch (e) { reject(e); } });
   });
 }
@@ -184,7 +188,35 @@ async function api(req, res, url) {
   const method = req.method;
   let body = {};
   if (method === 'POST') {
-    try { body = await readBody(req); } catch (_) { return send(res, 400, { error: 'bad json' }); }
+    try { body = await readBody(req, route === '/api/admin/image' ? 8e6 : 1e6); } catch (_) { return send(res, 400, { error: 'bad json' }); }
+  }
+
+
+  // ---------- course images uploaded by the parent (stored on the server only, never in git) ----------
+  if (route === '/api/admin/image' && method === 'POST') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    const name = String(body.name || '');
+    if (!IMG_SLOTS[name]) return send(res, 400, { error: 'bad slot' });
+    for (const e of Object.values(IMG_TYPES)) { const f = path.join(IMG_DIR, name + '.' + e); if (fs.existsSync(f)) fs.unlinkSync(f); }
+    if (body.remove) return send(res, 200, { ok: true });
+    const m = String(body.data || '').match(/^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/);
+    if (!m) return send(res, 400, { error: 'bad image' });
+    const buf = Buffer.from(m[2], 'base64');
+    if (!buf.length || buf.length > 5e6) return send(res, 400, { error: 'image too big' });
+    fs.mkdirSync(IMG_DIR, { recursive: true });
+    fs.writeFileSync(path.join(IMG_DIR, name + '.' + IMG_TYPES[m[1]]), buf);
+    return send(res, 200, { ok: true });
+  }
+  if (route === '/api/admin/images' && method === 'GET') {
+    if (!pinOk(req.headers['x-admin-pin'])) return send(res, 403, { error: 'bad pin' });
+    return send(res, 200, { slots: Object.entries(IMG_SLOTS).map(([k, label]) => ({ name: k, label, has: !!imgFile(k) })) });
+  }
+  if (route.startsWith('/api/img/') && method === 'GET') {
+    // <img> tags cannot send headers, so the signed-in email rides the query string (same trust model as the rest of the API)
+    const name = route.slice(9), f = imgFile(name), u0 = db.users[normEmail(url.searchParams.get('u'))];
+    if (!u0 || !f) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'image/' + (f.endsWith('jpg') ? 'jpeg' : path.extname(f).slice(1)), 'Cache-Control': 'private, max-age=300' });
+    return res.end(fs.readFileSync(f));
   }
 
   if (route === '/api/signup' && method === 'POST') {

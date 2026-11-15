@@ -687,6 +687,11 @@
     const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : (c === 'wb' || c === 'teen') && !opens[c] ? '⛔ סגור' : '🔓 פתוח לכולם'}</td>
       <td><input class="search" style="width:170px;margin:0" type="text" autocomplete="off" data-cpwin="${c}" placeholder="${pws[c] ? 'סיסמה חדשה' : 'סיסמה'}"></td>
       <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''} ${(c === 'wb' || c === 'teen') && !pws[c] && !opens[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">פתיחה לכולם</button>` : ''} ${(c === 'wb' || c === 'teen') && (pws[c] || opens[c]) ? `<button class="linkbtn" data-cpw="${c}" data-close="1">סגירת הקורס</button>` : ''}</td></tr>`;
+    let slots = []; try { slots = (await fetch('/api/admin/images', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json())).slots || []; } catch (e) {}
+    const imgCard = slots.length ? `<div class="card"><h2>🖼️ תמונות לקורסים</h2>
+      <p class="small muted" style="margin-top:0">תמונה שתעלו כאן נשמרת בשרת (לא בקוד), ומוצגת במקום שלה בשיעור רק למי שמחובר לאתר. כל עוד אין תמונה – מוצג האיור שלנו.</p>
+      <table class="tbl">${slots.map((x) => `<tr><td><b>${esc(x.label)}</b></td><td>${x.has ? `✅ יש תמונה <img src="/api/img/${x.name}?u=${encodeURIComponent(user.email)}&t=${Date.now()}" alt="" style="height:48px;vertical-align:middle;border-radius:6px">` : 'אין תמונה'}</td>
+        <td><label class="btn ghost" style="cursor:pointer">📤 ${x.has ? 'החלפה' : 'העלאה'}<input type="file" accept="image/*" data-imgup="${x.name}" hidden></label> ${x.has ? `<button class="linkbtn" data-imgdel="${x.name}">מחיקה</button>` : ''}</td></tr>`).join('')}</table></div>` : '';
     const pwCard = `<div class="card"><h2>🔑 סיסמאות לקורסים</h2>
       <p class="small muted" style="margin-top:0">מי שמכיר/ה את הסיסמה פותח/ת את הקורס פעם אחת, והוא נשאר פתוח בחשבון שלו/ה. "המדע של האושר" אפשר לסגור, לפתוח לכולם (הסרת סיסמה) או להגן בסיסמה. גישה של חשבון מסוים אפשר להסיר בכרטיס שלו למטה.</p>
       <table class="tbl">${pwRow('teen', '🌱 המדע של האושר לבני נוער')}${pwRow('wb', '😊 המדע של האושר')}${pwRow('es', '🇪🇸 ספרדית')}${pwRow('fr', '🇫🇷 צרפתית')}</table></div>`;
@@ -698,7 +703,7 @@
       <div class="card scroll"><table class="tbl"><tr><th>שם</th><th>מייל</th><th>🇪🇸 ספרדית</th><th>🇫🇷 צרפתית</th><th>טעויות פתוחות</th><th>פעילות אחרונה</th></tr>
       ${users.map((u, ui) => { const a = summary(u, 'es'), b = summary(u, 'fr'); return `<tr data-goto="${ui}" style="cursor:pointer" title="לחצו לעריכה"><td><b>${esc(u.name || '—')}</b> <span class="small">✏️</span></td><td dir="ltr" style="text-align:right">${esc(u.email)}</td><td>${a.ids.length}/30 · ${a.avg == null ? '–' : a.avg}</td><td>${dataOf(u, 'fr') ? `${b.ids.length}/30 · ${b.avg == null ? '–' : b.avg}` : '–'}</td><td>${a.mist + b.mist}</td><td>${a.last ? fmtDate(a.last) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6">אין עדיין משתמשים</td></tr>'}
       </table></div>
-      ${remCard}${pwCard}
+      ${remCard}${pwCard}${imgCard}
       ${users.map((u, ui) => `<div class="card" id="pu-${ui}"><div class="row between"><h2 style="margin:0">${esc(u.name || u.email)}</h2><a class="linkbtn small" href="javascript:void 0" data-top="1">↑ לרשימה</a></div>
         <div class="row" style="margin-bottom:12px">
           <label class="small">📱 טלפון לתזכורות: <input class="search" style="width:190px;margin:0;direction:ltr" data-ph="${esc(u.email)}" value="${esc(u.phone || '')}" placeholder="05X-XXXXXXX"></label>
@@ -720,6 +725,17 @@
     $app.querySelectorAll('[data-acc]').forEach((b) => b.onclick = async () => {
       const r = await adminPost('course-access', { email: b.dataset.acc, course: b.dataset.c || 'wb', on: b.dataset.on === '1' });
       toast(r.ok ? '✅ עודכן' : 'שגיאה'); viewParent();
+    });
+    // shrink big photos in the browser (max 1600px, JPEG) before upload
+    const shrink = (file) => new Promise((ok, no) => { const im = new Image(); im.onload = () => { const k = Math.min(1, 1600 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.88)); URL.revokeObjectURL(im.src); }; im.onerror = no; im.src = URL.createObjectURL(file); });
+    $app.querySelectorAll('[data-imgup]').forEach((inp) => inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      try { const r = await adminPost('image', { name: inp.dataset.imgup, data: await shrink(f) }); toast(r.ok ? '✅ התמונה הועלתה' : 'שגיאה: ' + (r.error || '')); } catch (e) { toast('לא הצלחנו להעלות את התמונה'); }
+      viewParent();
+    });
+    $app.querySelectorAll('[data-imgdel]').forEach((b) => b.onclick = async () => {
+      if (!confirm('למחוק את התמונה?')) return;
+      const r = await adminPost('image', { name: b.dataset.imgdel, remove: true }); toast(r.ok ? '🗑️ נמחקה' : 'שגיאה'); viewParent();
     });
     $app.querySelectorAll('[data-cpw]').forEach((b) => b.onclick = async () => {
       const c = b.dataset.cpw, inp = $app.querySelector(`[data-cpwin="${c}"]`);
@@ -855,6 +871,11 @@
     $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
       <article class="card wbtext"><h1>${cleanTitle(s.title)}</h1><p class="small muted" style="margin-top:-6px">⏱️ זמן קריאה: כ-${readMin(s.html)} דק׳</p>${html}</article>${wbNav('s' + i)}`;
     $app.querySelector('[data-next]').addEventListener('click', () => wbMark(s.id));
+    $app.querySelectorAll('.userimg[data-img]').forEach((box) => {
+      const im = new Image(); im.alt = box.dataset.cap || '';
+      im.onload = () => { box.innerHTML = `<figure class="wbfig"><img src="${im.src}" alt="${esc(im.alt)}" style="max-width:100%;max-height:520px;border-radius:10px"><figcaption>${esc(box.dataset.cap || '')}</figcaption></figure>`; };
+      im.src = `/api/img/${box.dataset.img}?u=${encodeURIComponent(user.email)}`;
+    });
     window.scrollTo(0, 0);
   }
   function wbReview() {
