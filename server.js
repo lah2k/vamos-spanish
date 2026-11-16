@@ -79,8 +79,8 @@ const IMG_DIR = path.join(DATA_DIR, 'images');
 const IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 const IMG_SLOTS = { 'teen-dress': 'המדע של האושר לבני נוער · מודול 1 · סרטון 6: "השמלה"' };
 const imgFile = (name) => { if (!IMG_SLOTS[name]) return null; for (const e of Object.values(IMG_TYPES)) { const f = path.join(IMG_DIR, name + '.' + e); if (fs.existsSync(f)) return f; } return null; };
-const ALL_COURSES = ['es', 'fr', 'wb', 'teen'];
-const CLOSED_BY_DEFAULT = ['wb', 'teen'];
+const ALL_COURSES = ['es', 'fr', 'wb', 'teen', 'lhtl'];
+const CLOSED_BY_DEFAULT = ['wb', 'teen', 'lhtl'];
 const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const coursePw = (c) => (db.settings.coursePw || {})[c] || null;
 const courseOpen = (c) => !!((db.settings.courseOpen || {})[c]);
@@ -101,6 +101,7 @@ if (!db.settings) db.settings = {};
 for (const u of Object.values(db.users)) if (u.wbAccess) { u.unlocked = u.unlocked || {}; u.unlocked.wb = true; delete u.wbAccess; }
 // one-off (parent's request, Nov 2026): only the parent's account keeps well-being access
 if (!db.settings.migTeenParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.teen = true; } db.settings.migTeenParent = true; }
+if (!db.settings.migLhtlParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.lhtl = true; } db.settings.migLhtlParent = true; }
 if (!db.settings.migWbParentOnly) { for (const u of Object.values(db.users)) if (u.email !== 'lahav2000@gmail.com' && u.unlocked) delete u.unlocked.wb; db.settings.migWbParentOnly = true; }
 
 let saveTimer = null;
@@ -402,31 +403,33 @@ async function api(req, res, url) {
     return send(res, 200, { user: publicUser(u) });
   }
 
-  if (route.startsWith('/api/teen/')) {
-    if (courseLocked(u, 'teen')) return send(res, 403, { error: 'locked' });
-    const w = teenOf(u);
-    if (route === '/api/teen/modules' && method === 'GET') {
-      return send(res, 200, { modules: courseModules('teen').map((m) => { const c = courseContent('teen', m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
+  // 'teen' and 'lhtl' (Learning How to Learn) share the same simple viewer API: modules, content, read, quiz
+  const tk = (route.match(/^\/api\/(teen|lhtl)\//) || [])[1];
+  if (tk) {
+    if (courseLocked(u, tk)) return send(res, 403, { error: 'locked' });
+    const w = tk === 'teen' ? teenOf(u) : (u[tk] = u[tk] || { read: {}, quiz: {} });
+    if (route === `/api/${tk}/modules` && method === 'GET') {
+      return send(res, 200, { modules: courseModules(tk).map((m) => { const c = courseContent(tk, m); return c ? { module: m, title: c.moduleTitle, sections: c.sections.map((x) => x.id) } : null; }).filter(Boolean) });
     }
-    if (route === '/api/teen/content' && method === 'GET') {
-      const c = courseContent('teen', url.searchParams.get('m') || 1);
+    if (route === `/api/${tk}/content` && method === 'GET') {
+      const c = courseContent(tk, url.searchParams.get('m') || 1);
       return c ? send(res, 200, { content: c }) : send(res, 503, { error: 'content unavailable' });
     }
-    if (route === '/api/teen/read' && method === 'POST') {
+    if (route === `/api/${tk}/read` && method === 'POST') {
       const sid = String(body.sid || '').slice(0, 40);
       if (!sid) return send(res, 400, { error: 'bad section' });
       if (!w.read[sid]) w.read[sid] = DATE_RE.test(body.date) ? body.date : new Date().toISOString().slice(0, 10);
       markActive(u, body.date); save();
       return send(res, 200, { user: publicUser(u) });
     }
-    if (route === '/api/teen/quiz' && method === 'POST') {
+    if (route === `/api/${tk}/quiz` && method === 'POST') {
       const m = String(Number(body.m) || 0), score = Number(body.score), total = Number(body.total);
-      if (!courseContent('teen', m) || !(total > 0 && score >= 0 && score <= total)) return send(res, 400, { error: 'bad quiz' });
+      if (!courseContent(tk, m) || !(total > 0 && score >= 0 && score <= total)) return send(res, 400, { error: 'bad quiz' });
       w.quiz = w.quiz || {}; (w.quiz[m] = w.quiz[m] || []).push({ at: new Date().toISOString(), date: DATE_RE.test(body.date) ? body.date : null, score, total, wrong: (Array.isArray(body.wrong) ? body.wrong : []).map(Number).slice(0, 50) });
       markActive(u, body.date); save();
       return send(res, 200, { user: publicUser(u) });
     }
-    if (route === '/api/teen/self' && method === 'POST') {
+    if (tk === 'teen' && route === '/api/teen/self' && method === 'POST') {
       // "know yourself" questionnaire: life satisfaction (5 x 1-7), feelings (8 x 1-5), top strengths
       const a = (Array.isArray(body.life) ? body.life : []).map(Number), f = (Array.isArray(body.feel) ? body.feel : []).map(Number);
       if (a.length !== 5 || a.some((v) => !(Number.isInteger(v) && v >= 1 && v <= 7))) return send(res, 400, { error: 'bad life answers' });
