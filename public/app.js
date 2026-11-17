@@ -763,6 +763,7 @@
   // ---------- המדע של האושר (Well-Being, private course) ----------
   const WBINFO = { code: 'he', flag: '😊', brand: 'המדע של האושר', name: 'המדע של האושר' };
   const AIINFO = { code: 'he', flag: '🤖', brand: 'בינה מלאכותית', name: 'בינה מלאכותית – ללמוד להצליח עם AI' };
+  const CEM = () => ({ med: '🧘', ai: '🤖', lhtl: '🧠', teen: '🌱' })[WK] || '😊';
   const MEDINFO = { code: 'he', flag: '🧘', brand: 'מדיטציה', name: 'מדיטציה – דרך לשפר את החיים' };
   const LHTLINFO = { code: 'he', flag: '🧠', brand: 'ללמוד איך ללמוד', name: 'ללמוד איך ללמוד' };
   const TEENINFO = { code: 'he', flag: '🌱', brand: 'המדע של האושר לבני נוער', name: 'המדע של האושר לבני נוער' };
@@ -852,7 +853,7 @@
     const next = steps.find((x) => !x.done);
     const last = (WB().perma || []).slice(-1)[0];
     $app.innerHTML = `<div class="card hello">
-        <div class="row between"><h1 style="margin:0">😊 ${esc(WBC.moduleTitle)}</h1><a class="pill" href="#/${WK}" style="text-decoration:none">📚 כל הקורס</a></div>
+        <div class="row between"><h1 style="margin:0">${CEM()} ${esc(WBC.moduleTitle)}</h1><a class="pill" href="#/${WK}" style="text-decoration:none">📚 כל הקורס</a></div>
         <p style="margin:6px 0 0">${COURSE_INFO[WK].credit}</p>
         <div style="margin-top:14px" class="bar"><i style="width:${n / steps.length * 100}%"></i></div>
         <p class="small muted">${n} מתוך ${steps.length} חלקים הושלמו</p>
@@ -877,7 +878,7 @@
     if (WK === 'wb' && /^משימת/.test(s.title) && CUR === 4) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/4/health">🏃 למלא את היומן כאן באתר</a></div>`;
     if (WK === 'wb' && /^משימת/.test(s.title) && CUR === 3) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/3/kindlog">🤝 למלא את היומן כאן באתר</a></div>`;
     if (WK === 'wb' && /^משימת/.test(s.title) && CUR === 2) html += `<div class="row" style="margin-top:10px"><a class="btn alt" href="#/wb/2/journal">📔 למלא את היומן כאן באתר</a></div>`;
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a> · חלק ${i + 1}</p>
       <article class="card wbtext"><h1>${cleanTitle(s.title)}</h1><p class="small muted" style="margin-top:-6px">⏱️ זמן קריאה: כ-${readMin(s.html)} דק׳</p>${html}</article>${wbNav('s' + i)}`;
     $app.querySelector('[data-next]').addEventListener('click', () => wbMark(s.id));
     $app.querySelectorAll('.userimg[data-img]').forEach((box) => {
@@ -889,7 +890,7 @@
   }
   function wbReview() {
     const r = WBC.review;
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${r.title}</h1>${r.intro}
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${r.title}</h1>${r.intro}
       ${r.items.map((q, i) => `<details class="wbq"><summary><b>${i + 1}.</b> ${q.q}</summary><div class="ans">${q.a.replace(/<\/?li>/g, '')}</div></details>`).join('')}</div>${wbNav('review')}`;
     $app.querySelector('[data-next]').addEventListener('click', () => wbMark(CUR === 1 ? 'review' : `m${CUR}:review`));
   }
@@ -898,7 +899,7 @@
     if (sub === 'results') return wbPermaResults();
     const phase = hist.some((h) => h.phase === 'pre') ? 'post' : 'pre';
     const ans = {};
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${P.title}</h1>${P.intro}
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${P.title}</h1>${P.intro}
       <p class="small">💾 כאן באתר לא צריך לרשום כלום – התשובות והציונים נשמרים בחשבון שלכם${hist.length ? ` (כבר מילאתם ${hist.length} פעמים · <a href="#/wb/1/perma/results">לתוצאות</a>)` : ''}.</p>
       <div class="row small"><label><input type="radio" name="ph" value="pre" ${phase === 'pre' ? 'checked' : ''}> מדידת פתיחה</label><label><input type="radio" name="ph" value="post" ${phase === 'post' ? 'checked' : ''}> מדידת סיום (להשוואה)</label></div></div>
       ${P.items.map((it) => `<div class="card pq" data-n="${it.n}"><p><b>${it.n}.</b> ${it.q}</p>
@@ -933,7 +934,7 @@
         ${cmp ? `<span class="pill ${good}"><bdi dir="ltr">${d > 0 ? '+' : ''}${d}</bdi></span>` : ''}</div>`;
     };
     const top = PERMA_DIMS.slice(0, 5).map((x) => [x[1], last.scores[x[0]]]).sort((a, b) => b[1] - a[1]);
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>📊 התוצאות שלי – PERMA</h1>
       <p class="muted">${last.phase === 'pre' ? 'מדידת פתיחה' : 'מדידת סיום'} · ${fmtDate(last.date || last.at)} · כל ציון הוא ממוצע מ-0 עד 10.</p>
       ${PERMA_DIMS.map(row).join('')}
@@ -947,7 +948,7 @@
     const areas = [...new Set(V.strengths.map((s) => s.area))];
     const render = () => {
       const days = WB().strengthDays || []; const t = today();
-      $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${V.title}</h1>${V.intro}</div>
+      $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p><div class="card wbtext"><h1>${V.title}</h1>${V.intro}</div>
         <div class="card"><h2>💪 החוזקות שלי <span class="small muted">(${top.length}/5 – לחצו לבחירה, לפי הסדר)</span></h2>
         <div class="row">${top.length ? top.map((n, i) => `<span class="pill purple">${i + 1}. ${esc(n)}</span>`).join('') : '<span class="muted small">עוד לא בחרתם</span>'}</div>
         ${areas.map((a) => `<h3 style="margin-top:14px">${esc(a)}</h3><div class="via">${V.strengths.filter((s) => s.area === a).map((s) => `<button type="button" class="vchip ${top.includes(s.name) ? 'on' : ''}" data-s="${esc(s.name)}"><b>${esc(s.name)}</b><span>${esc(s.desc)}</span>${top.includes(s.name) ? `<i>${top.indexOf(s.name) + 1}</i>` : ''}</button>`).join('')}</div>`).join('')}
@@ -975,7 +976,7 @@
     [CUR, WBC] = keep;
     const all = mods.flatMap((x) => x.steps); const n = all.filter((x) => x.done).length;
     const next = mods.map((x) => ({ x, st: x.steps.find((y) => !y.done) })).find((y) => y.st);
-    $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">${WK === 'med' ? '🧘' : WK === 'ai' ? '🤖' : WK === 'lhtl' ? '🧠' : WK === 'teen' ? '🌱' : '😊'} ${COURSE_INFO[WK].title}</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
+    $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">${CEM()} ${COURSE_INFO[WK].title}</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
       ${WK === 'med' ? '<p style="margin:6px 0 0">לפי הקורס Meditation: A way to achieve your goals in your life של פרופ׳ דאק-ג׳ו לי, מהנדס אווירונאוטיקה באוניברסיטת KAIST בקוריאה (Coursera). סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'ai' ? '<p style="margin:6px 0 0">לפי הקורס Generative AI: Prompt Engineering for Everyone ב-Coursera. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'lhtl' ? '<p style="margin:6px 0 0">לפי הקורס Learning How to Learn של ד״ר ברברה אוקלי ופרופ׳ טרי סיינובסקי (Coursera) – אחד הקורסים המקוונים הפופולריים בעולם. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'teen' ? '<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being for Teens של פרופ׳ לורי סנטוס (ייל), שצולם במעונות ייל מול תלמידי תיכון. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : `<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
       <ul class="small" style="margin:8px 0 0;padding-right:20px"><li>הקורס הפופולרי ביותר ב-300 שנות אוניברסיטת ייל בארה"ב – כמעט רבע מהסטודנטים לתואר ראשון נרשמו אליו מאז 2018.</li><li>הקורס הפופולרי ביותר בפלטפורמת <a href="https://www.coursera.org/learn/the-science-of-well-being" target="_blank" rel="noopener">Coursera</a>, עם יותר מ-5 מיליון נרשמים.</li></ul>`}
       <div style="margin-top:14px" class="bar"><i style="width:${n / all.length * 100}%"></i></div>
@@ -992,7 +993,7 @@
     const moveDays = days.filter((d) => J[d].min >= 30).length, sleepNights = days.filter((d) => J[d].sleep >= 9).length;
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
     const dots = (n, of) => `<span class="big7">${Array.from({ length: of }, (_, i) => `<span class="dot ${i < n ? 'on' : ''}"></span>`).join('')}</span>`;
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>🏃 היומן שלי: תנועה ושינה</h1>
       <p class="muted">כל יום רושמים כמה דקות זזתם וכמה שעות ישנתם בלילה. המטרה: 30 דקות תנועה ב-7 ימים, ולפחות 4 לילות של שינה מלאה (לילדים – לפחות 9 שעות).</p>
       <div class="row">🏃 ${dots(moveDays, 7)}<span class="small muted">${moveDays}/7 ימים עם 30 דקות</span></div>
@@ -1019,7 +1020,7 @@
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
     const save = async (b, msg) => { try { user = (await api('wb/challenge', b)).user; toast(msg || '✅ נשמר'); wbChallenge(); } catch (er) { toast('לא הצלחנו לשמור, נסו שוב'); } };
     const v = (id) => document.getElementById(id).value;
-    const head = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>`;
+    const head = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>`;
     const setup = `<div class="card"><h2>${C.habit ? '✏️ לעדכן את האתגר' : '1️⃣ בוחרים הרגל'}</h2>
       <div class="row" style="flex-wrap:wrap;gap:8px">${Object.entries(HABITS).map(([k, n]) => `<label class="pill" style="cursor:pointer"><input type="radio" name="hab" value="${k}" ${C.habit === k ? 'checked' : ''}> ${n}</label>`).join('')}</div>
       <h3 style="margin-top:16px">2️⃣ עושים WOOP (חמש דקות שקטות, בסדר הזה!)</h3>
@@ -1069,7 +1070,7 @@
     const good = days.filter((d) => J[d].min >= 10).length;
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
     const dots = (n, of) => `<span class="big7">${Array.from({ length: of }, (_, i) => `<span class="dot ${i < n ? 'on' : ''}"></span>`).join('')}</span>`;
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>🧘 היומן שלי: מדיטציה ומכתב תודה</h1>
       <p class="muted">כל יום רושמים כמה דקות מדטתם ואיך הרגשתם אחר כך. המטרה: לפחות 10 דקות ב-7 ימים, ומכתב תודה אחד שנקרא בקול.</p>
       <div class="row">🧘 ${dots(Math.min(good, 7), 7)}<span class="small muted">${good}/7 ימים עם 10 דקות ומעלה</span></div>
@@ -1103,7 +1104,7 @@
     const e = J[date] || { kind: '', conn: '' };
     const days = Object.keys(J).sort().reverse();
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>🤝 היומן שלי: טוב לב וקשר חברתי</h1>
       <p class="muted">7 ימים: כל ערב רושמים איזה מעשה טוב עשיתם היום, ועם מי יצרתם קשר. הכול נשמר בחשבון שלכם.</p>
       <div class="row"><span class="big7">${Array.from({ length: 7 }, (_, i) => `<span class="dot ${i < days.length ? 'on' : ''}"></span>`).join('')}</span><span class="small muted">${days.length}/7 ימים</span></div></div>
@@ -1128,7 +1129,7 @@
   const TEEN_STR = ['יצירתיות', 'סקרנות', 'פתיחות מחשבתית', 'אהבת למידה', 'חוכמה', 'אומץ', 'התמדה', 'יושר', 'שמחת חיים ואנרגיה', 'אהבה', 'טוב לב', 'אינטליגנציה חברתית', 'עבודת צוות', 'הגינות', 'מנהיגות', 'סליחה', 'ענווה', 'זהירות', 'שליטה עצמית', 'הערכת יופי ומצוינות', 'הכרת תודה', 'תקווה ואופטימיות', 'הומור', 'אמונה ומשמעות'];
   function teenSelf(sub) {
     const hist = WB().self || [];
-    const head = `<p class="small"><a href="#/teen/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>`;
+    const head = `<p class="small"><a href="#/teen/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>`;
     if (sub === 'results' && hist.length) {
       const last = hist[hist.length - 1], first = hist[0];
       const lifeTxt = (v) => v > 25 ? 'מרוצים מאוד מהחיים 🌟' : v >= 15 ? 'באמצע – יש על מה לעבוד 🙂' : 'כדאי לשים לב, ואולי גם לדבר עם מבוגר שסומכים עליו 💛';
@@ -1170,7 +1171,7 @@
   }
   function wbQuiz() {
     const Q = WBC.quiz || []; let i = 0, score = 0; const wrong = []; const hist = (WB().quiz || {})[CUR] || [];
-    const head = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>`;
+    const head = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>`;
     const show = () => {
       if (i >= Q.length) return finish();
       const q = Q[i]; const order = q.o.map((_, k) => k);
@@ -1224,7 +1225,7 @@
     const e = J[date] || { savor: '', grat: [] };
     const days = Object.keys(J).sort().reverse();
     const shift = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
-    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">😊 ${esc(WBC.moduleTitle)}</a></p>
+    $app.innerHTML = `<p class="small"><a href="#/${WK}/${CUR}">${CEM()} ${esc(WBC.moduleTitle)}</a></p>
       <div class="card"><h1>📔 היומן שלי: הנאה מודעת ותודה</h1>
       <p class="muted">7 ימים: כל ערב רושמים על מה התענגתם היום, וחמישה דברים שאתם מוקירים תודה עליהם. הכול נשמר בחשבון שלכם.</p>
       <div class="row"><span class="big7">${Array.from({ length: 7 }, (_, i) => `<span class="dot ${i < days.length ? 'on' : ''}"></span>`).join('')}</span><span class="small muted">${days.length}/7 ימים</span></div></div>
