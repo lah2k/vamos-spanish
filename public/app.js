@@ -251,7 +251,7 @@
 
   const locked = (c) => !!(user && user.locks && user.locks[c] && user.locks[c] !== 'open');
   function viewUnlock(c) {
-    const name = c === 'wb' ? 'המדע של האושר' : c === 'teen' ? 'המדע של האושר לבני נוער' : c === 'lhtl' ? 'ללמוד איך ללמוד' : c === 'ai' ? 'בינה מלאכותית – ללמוד להצליח עם AI' : (COURSES[c] || {}).name || c;
+    const name = c === 'wb' ? 'המדע של האושר' : c === 'teen' ? 'המדע של האושר לבני נוער' : c === 'lhtl' ? 'ללמוד איך ללמוד' : c === 'ai' ? 'בינה מלאכותית – ללמוד להצליח עם AI' : c === 'med' ? 'מדיטציה – דרך לשפר את החיים' : (COURSES[c] || {}).name || c;
     const closed = user.locks && user.locks[c] === 'closed';
     $app.innerHTML = `<div class="card login"><div class="hero">🔒</div><h1>${esc(name)}</h1>
       ${closed ? '<p class="muted">הקורס הזה עוד לא נפתח. נסו שוב בקרוב 🙂</p>' : `<p class="muted">הקורס מוגן בסיסמה. הסיסמה נדרשת פעם אחת בלבד.</p>
@@ -260,13 +260,14 @@
     const f = document.getElementById('uf'); if (!f) return;
     f.onsubmit = async (e) => {
       e.preventDefault();
-      try { user = (await api('unlock', { course: c, password: document.getElementById('upw').value })).user; toast('🔓 הקורס נפתח!'); if (c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai') go('#/' + c); else { setCourse(c); go('#/home'); } }
+      try { user = (await api('unlock', { course: c, password: document.getElementById('upw').value })).user; toast('🔓 הקורס נפתח!'); if (c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai' || c === 'med') go('#/' + c); else { setCourse(c); go('#/home'); } }
       catch (er) { document.getElementById('uerr').textContent = er.status === 429 ? 'יותר מדי ניסיונות. נסו שוב בעוד שעה.' : 'הסיסמה לא נכונה'; }
     };
   }
   function wbCard(k) {
     const w = (user && user[k]) || {}; const n = Object.keys(w.read || {}).length + ((w.perma || []).length ? 1 : 0) + ((w.strengths || []).length ? 1 : 0) + ((w.self || []).length ? 1 : 0);
-    const T = k === 'ai' ? { em: '🤖', name: 'בינה מלאכותית – ללמוד להצליח עם AI', sub: 'לפי הקורס Generative AI: Prompt Engineering for Everyone · סיכומים ובחנים' }
+    const T = k === 'med' ? { em: '🧘', name: 'מדיטציה – דרך לשפר את החיים', sub: 'לפי הקורס Meditation: A way to achieve your goals in your life (KAIST) · סיכומים, תרגולים ובחנים' }
+      : k === 'ai' ? { em: '🤖', name: 'בינה מלאכותית – ללמוד להצליח עם AI', sub: 'לפי הקורס Generative AI: Prompt Engineering for Everyone · סיכומים ובחנים' }
       : k === 'lhtl' ? { em: '🧠', name: 'ללמוד איך ללמוד', sub: 'לפי הקורס Learning How to Learn של ברברה אוקלי וטרי סיינובסקי · סיכומים, איורים ובחנים' }
       : k === 'teen' ? { em: '🌱', name: 'המדע של האושר לבני נוער', sub: 'הגרסה לבני נוער של הקורס של פרופ׳ לורי סנטוס · סיכומים, איורים ושאלונים' }
       : { em: '😊', name: 'המדע של האושר', sub: 'לפי הקורס של פרופ׳ לורי סנטוס · סרטונים, קריאה ושאלונים' };
@@ -297,7 +298,7 @@
     };
     $app.innerHTML = `<h1>מה לומדים היום, ${esc(user.name)}? 🌍</h1>
       <p class="muted">כל קורס נשמר בנפרד – אפשר ללמוד כמה קורסים ולעבור ביניהם מתי שרוצים.</p>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${card('es')}${card('fr')}${wbCard('lhtl')}${wbCard('ai')}${wbCard('teen')}${wbCard('wb')}</div>`;
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${card('es')}${card('fr')}${wbCard('lhtl')}${wbCard('ai')}${wbCard('med')}${wbCard('teen')}${wbCard('wb')}</div>`;
     $app.querySelectorAll('[data-course]').forEach((a) => a.onclick = () => { if (!locked(a.dataset.course)) setCourse(a.dataset.course); });
   }
 
@@ -686,9 +687,9 @@
     const adminPost = (path, body) => fetch('/api/admin/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin }, body: JSON.stringify(body) }).then((r) => r.json());
     const today = rem && rem.now ? rem.now.date : '';
     let pws = {}, opens = {}; try { const j = await fetch('/api/admin/course-passwords', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json()); pws = j.courses || {}; opens = j.open || {}; } catch (e) {}
-    const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : (c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai') && !opens[c] ? '⛔ סגור' : '🔓 פתוח לכולם'}</td>
+    const pwRow = (c, name) => `<tr><td><b>${name}</b></td><td>${pws[c] ? '🔒 מוגן בסיסמה' : (c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai' || c === 'med') && !opens[c] ? '⛔ סגור' : '🔓 פתוח לכולם'}</td>
       <td><input class="search" style="width:170px;margin:0" type="text" autocomplete="off" data-cpwin="${c}" placeholder="${pws[c] ? 'סיסמה חדשה' : 'סיסמה'}"></td>
-      <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''} ${(c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai') && !pws[c] && !opens[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">פתיחה לכולם</button>` : ''} ${(c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai') && (pws[c] || opens[c]) ? `<button class="linkbtn" data-cpw="${c}" data-close="1">סגירת הקורס</button>` : ''}</td></tr>`;
+      <td><button class="btn ghost" data-cpw="${c}">שמירה</button> ${pws[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">הסרת סיסמה</button>` : ''} ${(c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai' || c === 'med') && !pws[c] && !opens[c] ? `<button class="linkbtn" data-cpw="${c}" data-clear="1">פתיחה לכולם</button>` : ''} ${(c === 'wb' || c === 'teen' || c === 'lhtl' || c === 'ai' || c === 'med') && (pws[c] || opens[c]) ? `<button class="linkbtn" data-cpw="${c}" data-close="1">סגירת הקורס</button>` : ''}</td></tr>`;
     let slots = []; try { slots = (await fetch('/api/admin/images', { headers: { 'X-Admin-Pin': pin } }).then((r) => r.json())).slots || []; } catch (e) {}
     const imgCard = slots.length ? `<div class="card"><h2>🖼️ תמונות לקורסים</h2>
       <p class="small muted" style="margin-top:0">תמונה שתעלו כאן נשמרת בשרת (לא בקוד), ומוצגת במקום שלה בשיעור רק למי שמחובר לאתר. כל עוד אין תמונה – מוצג האיור שלנו.</p>
@@ -696,7 +697,7 @@
         <td><label class="btn ghost" style="cursor:pointer">📤 ${x.has ? 'החלפה' : 'העלאה'}<input type="file" accept="image/*" data-imgup="${x.name}" hidden></label> ${x.has ? `<button class="linkbtn" data-imgdel="${x.name}">מחיקה</button>` : ''}</td></tr>`).join('')}</table></div>` : '';
     const pwCard = `<div class="card"><h2>🔑 סיסמאות לקורסים</h2>
       <p class="small muted" style="margin-top:0">מי שמכיר/ה את הסיסמה פותח/ת את הקורס פעם אחת, והוא נשאר פתוח בחשבון שלו/ה. "המדע של האושר" אפשר לסגור, לפתוח לכולם (הסרת סיסמה) או להגן בסיסמה. גישה של חשבון מסוים אפשר להסיר בכרטיס שלו למטה.</p>
-      <table class="tbl">${pwRow('lhtl', '🧠 ללמוד איך ללמוד')}${pwRow('ai', '🤖 בינה מלאכותית')}${pwRow('teen', '🌱 המדע של האושר לבני נוער')}${pwRow('wb', '😊 המדע של האושר')}${pwRow('es', '🇪🇸 ספרדית')}${pwRow('fr', '🇫🇷 צרפתית')}</table></div>`;
+      <table class="tbl">${pwRow('lhtl', '🧠 ללמוד איך ללמוד')}${pwRow('ai', '🤖 בינה מלאכותית')}${pwRow('med', '🧘 מדיטציה')}${pwRow('teen', '🌱 המדע של האושר לבני נוער')}${pwRow('wb', '😊 המדע של האושר')}${pwRow('es', '🇪🇸 ספרדית')}${pwRow('fr', '🇫🇷 צרפתית')}</table></div>`;
     const statusHe = (st) => !st ? 'עוד לא נבדק היום' : st === 'sent' ? '✅ נשלחה תזכורת' : st === 'done-already' ? '🌟 השיעור כבר נעשה – לא נשלחה תזכורת' : st === 'checking' ? 'בבדיקה…' : '⚠️ ' + st;
     const remCard = rem ? `<div class="card"><h2>📱 תזכורות וואטסאפ</h2>
       <p style="margin-top:0">${rem.configured ? `✅ מחובר. כל יום בשעה <b>${esc(rem.time)}</b> נבדק מי לא עשה שיעור היום, ונשלחת אליו תזכורת (תבנית: <bdi dir="ltr">${esc(rem.template)}</bdi>).` : '⚠️ וואטסאפ עוד לא מוגדר בשרת.'}</p>
@@ -715,7 +716,7 @@
           <button class="linkbtn" style="color:#c0392b" data-del="${esc(u.email)}" data-name="${esc(u.name || u.email)}">🗑️ מחיקת משתמש</button>
           <span class="small muted">היום: ${statusHe(rem && rem.sent && rem.sent[today] && rem.sent[today][u.email])}</span>
         </div>
-        ${[['lhtl', '🧠 ללמוד איך ללמוד'], ['ai', '🤖 בינה מלאכותית'], ['teen', '🌱 המדע של האושר לבני נוער'], ['wb', '😊 המדע של האושר']].map(([c, nm]) => `<p class="small">${nm}: ${(u.unlocked || {})[c] ? `✅ יש גישה <button class="linkbtn" data-acc="${esc(u.email)}" data-c="${c}" data-on="0">הסרת גישה</button>` : `אין גישה אישית <button class="linkbtn" data-acc="${esc(u.email)}" data-c="${c}" data-on="1">מתן גישה</button>`}</p>`).join('')}
+        ${[['lhtl', '🧠 ללמוד איך ללמוד'], ['ai', '🤖 בינה מלאכותית'], ['med', '🧘 מדיטציה'], ['teen', '🌱 המדע של האושר לבני נוער'], ['wb', '😊 המדע של האושר']].map(([c, nm]) => `<p class="small">${nm}: ${(u.unlocked || {})[c] ? `✅ יש גישה <button class="linkbtn" data-acc="${esc(u.email)}" data-c="${c}" data-on="0">הסרת גישה</button>` : `אין גישה אישית <button class="linkbtn" data-acc="${esc(u.email)}" data-c="${c}" data-on="1">מתן גישה</button>`}</p>`).join('')}
         ${trackerFor(u, 'es')}${dataOf(u, 'fr') ? trackerFor(u, 'fr') : ''}${wbParent(u)}</div>`).join('')}`;
     $app.querySelectorAll('[data-goto]').forEach((r) => r.onclick = () => { const el = document.getElementById('pu-' + r.dataset.goto); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.style.outline = '3px solid var(--teal)'; setTimeout(() => { el.style.outline = ''; }, 1600); });
     $app.querySelectorAll('[data-top]').forEach((b) => b.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -762,12 +763,14 @@
   // ---------- המדע של האושר (Well-Being, private course) ----------
   const WBINFO = { code: 'he', flag: '😊', brand: 'המדע של האושר', name: 'המדע של האושר' };
   const AIINFO = { code: 'he', flag: '🤖', brand: 'בינה מלאכותית', name: 'בינה מלאכותית – ללמוד להצליח עם AI' };
+  const MEDINFO = { code: 'he', flag: '🧘', brand: 'מדיטציה', name: 'מדיטציה – דרך לשפר את החיים' };
   const LHTLINFO = { code: 'he', flag: '🧠', brand: 'ללמוד איך ללמוד', name: 'ללמוד איך ללמוד' };
   const TEENINFO = { code: 'he', flag: '🌱', brand: 'המדע של האושר לבני נוער', name: 'המדע של האושר לבני נוער' };
   let WBC = null, CUR = 1, WK = 'wb'; const WBMODSK = {}, WBMK = {};
   // the same viewer serves two private courses: 'wb' (adults) and 'teen' (The Science of Well-Being for Teens)
   const COURSE_INFO = { wb: { title: 'המדע של האושר', credit: 'המדע של האושר · לפי הקורס של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.' },
     ai: { title: 'בינה מלאכותית – ללמוד להצליח עם AI', credit: 'בינה מלאכותית · לפי הקורס Generative AI: Prompt Engineering for Everyone (Coursera). סיכום בעברית לשימוש אישי ומשפחתי בלבד.' },
+    med: { title: 'מדיטציה – דרך לשפר את החיים', credit: 'מדיטציה · לפי הקורס Meditation: A way to achieve your goals in your life של פרופ׳ דאק-ג׳ו לי (KAIST, Coursera). סיכום בעברית לשימוש אישי ומשפחתי בלבד.' },
     lhtl: { title: 'ללמוד איך ללמוד', credit: 'ללמוד איך ללמוד · לפי הקורס Learning How to Learn של ד״ר ברברה אוקלי ופרופ׳ טרי סיינובסקי. סיכום בעברית לשימוש אישי ומשפחתי בלבד.' },
     teen: { title: 'המדע של האושר לבני נוער', credit: 'המדע של האושר לבני נוער · לפי הקורס של פרופ׳ לורי סנטוס (ייל). סיכום בעברית לשימוש אישי ומשפחתי בלבד.' } };
   const WB = () => (user && user[WK]) || { read: {}, perma: [], strengths: [], strengthDays: [], quiz: {} };
@@ -823,7 +826,7 @@
   }
   const wbMark = async (sid) => { if (!WB().read[sid]) { try { user = (await api(WK + '/read', { sid, date: today() })).user; } catch (e) {} } };
   async function viewWb(parts) {
-    parts = parts.slice(); useCourse(parts[0] === 'teen' || parts[0] === 'lhtl' || parts[0] === 'ai' ? parts[0] : 'wb');
+    parts = parts.slice(); useCourse(parts[0] === 'teen' || parts[0] === 'lhtl' || parts[0] === 'ai' || parts[0] === 'med' ? parts[0] : 'wb');
     if (locked(WK)) return viewUnlock(WK);
     if (parts[1] && !/^\d+$/.test(parts[1])) parts.splice(1, 0, '1'); // old links: #/wb/perma -> #/wb/1/perma
     try {
@@ -972,8 +975,8 @@
     [CUR, WBC] = keep;
     const all = mods.flatMap((x) => x.steps); const n = all.filter((x) => x.done).length;
     const next = mods.map((x) => ({ x, st: x.steps.find((y) => !y.done) })).find((y) => y.st);
-    $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">${WK === 'ai' ? '🤖' : WK === 'lhtl' ? '🧠' : WK === 'teen' ? '🌱' : '😊'} ${COURSE_INFO[WK].title}</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
-      ${WK === 'ai' ? '<p style="margin:6px 0 0">לפי הקורס Generative AI: Prompt Engineering for Everyone ב-Coursera. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'lhtl' ? '<p style="margin:6px 0 0">לפי הקורס Learning How to Learn של ד״ר ברברה אוקלי ופרופ׳ טרי סיינובסקי (Coursera) – אחד הקורסים המקוונים הפופולריים בעולם. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'teen' ? '<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being for Teens של פרופ׳ לורי סנטוס (ייל), שצולם במעונות ייל מול תלמידי תיכון. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : `<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
+    $app.innerHTML = `<div class="card hello"><div class="row between"><h1 style="margin:0">${WK === 'med' ? '🧘' : WK === 'ai' ? '🤖' : WK === 'lhtl' ? '🧠' : WK === 'teen' ? '🌱' : '😊'} ${COURSE_INFO[WK].title}</h1><a class="pill" href="#/courses" style="text-decoration:none">🔄 החלפת קורס</a></div>
+      ${WK === 'med' ? '<p style="margin:6px 0 0">לפי הקורס Meditation: A way to achieve your goals in your life של פרופ׳ דאק-ג׳ו לי, מהנדס אווירונאוטיקה באוניברסיטת KAIST בקוריאה (Coursera). סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'ai' ? '<p style="margin:6px 0 0">לפי הקורס Generative AI: Prompt Engineering for Everyone ב-Coursera. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'lhtl' ? '<p style="margin:6px 0 0">לפי הקורס Learning How to Learn של ד״ר ברברה אוקלי ופרופ׳ טרי סיינובסקי (Coursera) – אחד הקורסים המקוונים הפופולריים בעולם. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : WK === 'teen' ? '<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being for Teens של פרופ׳ לורי סנטוס (ייל), שצולם במעונות ייל מול תלמידי תיכון. סיכום בעברית לשימוש אישי ומשפחתי בלבד.</p>' : `<p style="margin:6px 0 0">לפי הקורס The Science of Well-Being של פרופ׳ לורי סנטוס (ייל). תרגום לשימוש אישי ומשפחתי בלבד.</p>
       <ul class="small" style="margin:8px 0 0;padding-right:20px"><li>הקורס הפופולרי ביותר ב-300 שנות אוניברסיטת ייל בארה"ב – כמעט רבע מהסטודנטים לתואר ראשון נרשמו אליו מאז 2018.</li><li>הקורס הפופולרי ביותר בפלטפורמת <a href="https://www.coursera.org/learn/the-science-of-well-being" target="_blank" rel="noopener">Coursera</a>, עם יותר מ-5 מיליון נרשמים.</li></ul>`}
       <div style="margin-top:14px" class="bar"><i style="width:${n / all.length * 100}%"></i></div>
       <p class="small muted">${n} מתוך ${all.length} חלקים הושלמו · ${WBMODS.length} מודולים</p>
@@ -1258,8 +1261,8 @@
     }
     document.getElementById('topbar').hidden = false;
     document.getElementById('username').textContent = '👤 ' + user.name;
-    const isWb = r === 'wb' || r === 'teen' || r === 'lhtl' || r === 'ai';
-    setBrand(r === 'courses' ? null : r === 'wb' ? WBINFO : r === 'teen' ? TEENINFO : r === 'lhtl' ? LHTLINFO : r === 'ai' ? AIINFO : INFO);
+    const isWb = r === 'wb' || r === 'teen' || r === 'lhtl' || r === 'ai' || r === 'med';
+    setBrand(r === 'courses' ? null : r === 'wb' ? WBINFO : r === 'teen' ? TEENINFO : r === 'lhtl' ? LHTLINFO : r === 'ai' ? AIINFO : r === 'med' ? MEDINFO : INFO);
     document.getElementById('mainnav').style.visibility = isWb ? 'hidden' : '';
     if (r === 'courses' || r === 'unlock' || (isWb && locked(r))) { try { user = (await api('me')).user; } catch (e) {} }
     if (isWb) { if ('speechSynthesis' in window) speechSynthesis.cancel(); return viewWb(parts); }

@@ -79,8 +79,8 @@ const IMG_DIR = path.join(DATA_DIR, 'images');
 const IMG_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 const IMG_SLOTS = { 'teen-dress': 'המדע של האושר לבני נוער · מודול 1 · סרטון 6: "השמלה"' };
 const imgFile = (name) => { if (!IMG_SLOTS[name]) return null; for (const e of Object.values(IMG_TYPES)) { const f = path.join(IMG_DIR, name + '.' + e); if (fs.existsSync(f)) return f; } return null; };
-const ALL_COURSES = ['es', 'fr', 'wb', 'teen', 'lhtl', 'ai'];
-const CLOSED_BY_DEFAULT = ['wb', 'teen', 'lhtl', 'ai'];
+const ALL_COURSES = ['es', 'fr', 'wb', 'teen', 'lhtl', 'ai', 'med'];
+const CLOSED_BY_DEFAULT = ['wb', 'teen', 'lhtl', 'ai', 'med'];
 const pwHash = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const coursePw = (c) => (db.settings.coursePw || {})[c] || null;
 const courseOpen = (c) => !!((db.settings.courseOpen || {})[c]);
@@ -103,6 +103,7 @@ for (const u of Object.values(db.users)) if (u.wbAccess) { u.unlocked = u.unlock
 if (!db.settings.migTeenParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.teen = true; } db.settings.migTeenParent = true; }
 if (!db.settings.migLhtlParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.lhtl = true; } db.settings.migLhtlParent = true; }
 if (!db.settings.migAiParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.ai = true; } db.settings.migAiParent = true; }
+if (!db.settings.migMedParent) { for (const u of Object.values(db.users)) if (u.email === 'lahav2000@gmail.com') { u.unlocked = u.unlocked || {}; u.unlocked.med = true; } db.settings.migMedParent = true; }
 if (!db.settings.migWbParentOnly) { for (const u of Object.values(db.users)) if (u.email !== 'lahav2000@gmail.com' && u.unlocked) delete u.unlocked.wb; db.settings.migWbParentOnly = true; }
 
 let saveTimer = null;
@@ -405,7 +406,7 @@ async function api(req, res, url) {
   }
 
   // 'teen', 'lhtl' (Learning How to Learn) and 'ai' share the same simple viewer API: modules, content, read, quiz
-  const tk = (route.match(/^\/api\/(teen|lhtl|ai)\//) || [])[1];
+  const tk = (route.match(/^\/api\/(teen|lhtl|ai|med)\//) || [])[1];
   if (tk) {
     if (courseLocked(u, tk)) return send(res, 403, { error: 'locked' });
     const w = tk === 'teen' ? teenOf(u) : (u[tk] = u[tk] || { read: {}, quiz: {} });
